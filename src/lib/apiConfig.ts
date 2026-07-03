@@ -12,7 +12,7 @@
 
 export const API_BASE_URL: string =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim().replace(/\/+$/, "") ||
-  "http://localhost:3000"
+  "https://sheepaitools-system-proxy.cybersheep33.workers.dev"
 
 /** 系统 API 请求路径拼接 */
 export function systemApiUrl(path: string): string {
