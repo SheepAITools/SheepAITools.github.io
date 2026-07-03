@@ -1,0 +1,147 @@
+```mermaid
+classDiagram
+  direction LR
+
+  class WorkspaceState {
+    +string currentView
+    +AuthState auth
+    +AccountInfo? account
+    +TokenRecord[] tokens
+    +ModelOption[] availableModels
+    +string selectedTokenId
+    +string selectedModelId
+    +string selectedToolId
+    +boolean isBootstrapping
+    +boolean isLoadingAccount
+    +boolean isLoadingTokens
+    +boolean isLoadingModels
+    +boolean isRunningTool
+    +string errorMessage
+    +dispatch(action: WorkspaceAction): void
+    +resetWorkspace(): void
+  }
+
+  class AuthState {
+    +string userId
+    +string systemToken
+    +boolean rememberUserId
+    +boolean isAuthenticated
+  }
+
+  class AccountInfo {
+    +string userId
+    +string? displayName
+    +string? email
+    +string? status
+    +string? organization
+  }
+
+  class TokenRecord {
+    +string id
+    +string name
+    +string tokenType
+    +string? description
+    +string? expiresAt
+    +boolean enabled
+    +number? usageCount
+    +string[] supportedModelIds
+  }
+
+  class TokenPage {
+    +number page
+    +number size
+    +number total
+    +TokenRecord[] items
+  }
+
+  class ModelOption {
+    +string id
+    +string label
+    +string provider
+    +string family
+    +string baseUrl
+    +string requestPath
+    +string description
+    +boolean enabled
+  }
+
+  class ToolDefinition {
+    +string id
+    +string name
+    +string shortName
+    +string description
+    +string outputLabel
+    +string placeholder
+    +string systemPrompt
+    +buildUserPrompt(inputText: string): string
+    +string defaultInput
+  }
+
+  class SystemApiClient {
+    +getSelf(userId: string, systemToken: string): Promise<AccountInfo>
+    +listTokens(userId: string, systemToken: string, page: number, size: number): Promise<TokenPage>
+    +getTokenModels(systemToken: string, tokenId: string): Promise<ModelOption[]>
+    +getTokenUsage(systemToken: string, tokenId: string): Promise<TokenUsage>
+  }
+
+  class ToolClient {
+    +runTool(apiKey: string, model: ModelOption, tool: ToolDefinition, inputText: string): Promise<RunToolResult>
+  }
+
+  class SessionStore {
+    +loadUserId(): string
+    +saveUserId(userId: string): void
+    +loadLastTokenId(): string
+    +saveLastTokenId(tokenId: string): void
+    +loadLastModelId(): string
+    +saveLastModelId(modelId: string): void
+  }
+
+  class RunToolResult {
+    +string content
+    +string endpoint
+    +string provider
+  }
+
+  class TokenUsage {
+    +string tokenId
+    +number promptTokens
+    +number completionTokens
+    +number totalTokens
+    +string? resetAt
+  }
+
+  class WorkspaceAction {
+    <<enumeration>>
+    BOOTSTRAP_START
+    BOOTSTRAP_SUCCESS
+    BOOTSTRAP_FAIL
+    AUTH_SUBMIT
+    AUTH_SUCCESS
+    AUTH_FAIL
+    TOKEN_SELECT
+    MODEL_SELECT
+    TOOL_SELECT
+    TOOL_RUN_START
+    TOOL_RUN_SUCCESS
+    TOOL_RUN_FAIL
+    RESET
+  }
+
+  WorkspaceState *-- AuthState
+  WorkspaceState o-- AccountInfo
+  WorkspaceState o-- TokenRecord
+  WorkspaceState o-- ModelOption
+  WorkspaceState o-- ToolDefinition
+  WorkspaceState ..> WorkspaceAction
+  SystemApiClient ..> AccountInfo
+  SystemApiClient ..> TokenPage
+  SystemApiClient ..> ModelOption
+  SystemApiClient ..> TokenUsage
+  ToolClient ..> ModelOption
+  ToolClient ..> ToolDefinition
+  ToolClient ..> RunToolResult
+  WorkspaceState ..> SystemApiClient
+  WorkspaceState ..> ToolClient
+  WorkspaceState ..> SessionStore
+```

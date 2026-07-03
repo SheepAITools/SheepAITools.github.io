@@ -1,0 +1,57 @@
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User as 用户
+  participant App as App.tsx
+  participant Store as Workspace State
+  participant Session as SessionStore
+  participant SystemApi as SystemApiClient
+  participant ToolApi as ToolClient
+
+  User->>App: 输入用户ID + 系统令牌并提交
+  App->>Store: AUTH_SUBMIT(userId, systemToken)
+  App->>SystemApi: getSelf(userId, systemToken)
+  alt 账号校验成功
+    SystemApi-->>App: AccountInfo
+    App->>Store: AUTH_SUCCESS(account)
+    App->>SystemApi: listTokens(userId, systemToken, p, size)
+    SystemApi-->>App: TokenPage
+    App->>Store: 显示账号确认态与令牌列表
+    App->>Session: saveUserId(userId)
+  else 账号校验失败
+    SystemApi-->>App: Error
+    App->>Store: AUTH_FAIL(errorMessage)
+    App-->>User: 停留在登录页并展示错误提示
+  end
+
+  User->>App: 选择某个 API Key / 令牌
+  App->>Store: TOKEN_SELECT(tokenId)
+  App->>SystemApi: getTokenModels(systemToken, tokenId)
+  App->>SystemApi: getTokenUsage(systemToken, tokenId)
+  alt 令牌可用且有模型
+    SystemApi-->>App: ModelOption[]
+    SystemApi-->>App: TokenUsage
+    App->>Store: MODEL_SELECT(defaultModel)
+    App->>Session: saveLastTokenId(tokenId)
+    App->>Session: saveLastModelId(modelId)
+    App-->>User: 进入控制台，展示可用模型与工具入口
+  else 令牌无可用模型
+    SystemApi-->>App: ModelOption[] = []
+    App->>Store: 展示空态并禁用工具入口
+    App-->>User: 提示切换令牌
+  end
+
+  User->>App: 选择工具并填写输入内容
+  App->>Store: TOOL_SELECT(toolId)
+  User->>App: 点击运行
+  App->>ToolApi: runTool(apiKey, model, tool, inputText)
+  alt 工具调用成功
+    ToolApi-->>App: RunToolResult
+    App->>Store: TOOL_RUN_SUCCESS(result)
+    App-->>User: 展示结果、endpoint 和复制按钮
+  else 工具调用失败
+    ToolApi-->>App: Error
+    App->>Store: TOOL_RUN_FAIL(errorMessage)
+    App-->>User: 仅在工具页展示失败原因，保留当前表单内容
+  end
+```
