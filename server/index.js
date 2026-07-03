@@ -140,6 +140,14 @@ function proxySheepAiRequest(request, response, requestUrl, startedAt) {
   }
 
   const targetUrl = new URL(`${targetPath}${requestUrl.search}`, TARGET_ORIGIN)
+
+  // Re-validate after URL normalization to prevent path traversal bypass
+  if (!isAllowedTargetPath(targetUrl.pathname)) {
+    writeJson(request, response, 403, { error: "Forbidden SheepAI path" })
+    logRequest(request.method ?? "GET", requestUrl.pathname, 403, startedAt)
+    return
+  }
+
   const proxyRequest = https.request(
     targetUrl,
     {
