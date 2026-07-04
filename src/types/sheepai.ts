@@ -76,6 +76,12 @@ export interface AccountInfo {
   email: string
   status: string
   organization: string
+  /** 用户余额 (quota units) */
+  quota: number
+  /** 已使用量 (quota units) */
+  usedQuota: number
+  /** 请求次数 */
+  requestCount: number
 }
 
 export interface TokenRecord {
@@ -88,6 +94,12 @@ export interface TokenRecord {
   enabled: boolean
   usageCount: number | null
   supportedModelIds: string[]
+  /** 无用量限制 */
+  unlimitedQuota: boolean
+  /** 已使用量 (quota units) */
+  usedQuota: number
+  /** 剩余额度 (quota units)，unlimited_quota=true 时无效 */
+  remainQuota: number
 }
 
 export interface TokenPage {

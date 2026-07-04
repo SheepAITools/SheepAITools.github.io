@@ -263,6 +263,7 @@ async function requestJson(path: string, options: SystemApiRequestOptions, apiKe
 function normalizeAccountInfo(body: unknown, fallbackUserId: string): AccountInfo {
   const record: JsonRecord = pickRecord(body)
   const resolvedUserId: string =
+    asString(record.id) ||
     asString(record.userId) ||
     asString(record.user_id) ||
     asString(record.username) ||
@@ -271,10 +272,13 @@ function normalizeAccountInfo(body: unknown, fallbackUserId: string): AccountInf
 
   return {
     userId: resolvedUserId,
-    displayName: asString(record.displayName) || asString(record.display_name) || asString(record.nickname) || asString(record.username),
+    displayName: asString(record.display_name) || asString(record.displayName) || asString(record.nickname) || asString(record.username),
     email: asString(record.email),
     status: asString(record.status) || asString(record.state) || "已验证",
     organization: asString(record.organization) || asString(record.org) || asString(record.group),
+    quota: asNumber(record.quota, 0),
+    usedQuota: asNumber(record.used_quota, 0),
+    requestCount: asNumber(record.request_count, 0),
   }
 }
 
@@ -313,6 +317,9 @@ function normalizeTokenRecord(value: unknown, index: number): TokenRecord | null
     enabled,
     usageCount: asNullableNumber(value.usageCount ?? value.used_count ?? value.quota_used),
     supportedModelIds,
+    unlimitedQuota: asBoolean(value.unlimited_quota, true),
+    usedQuota: asNumber(value.used_quota, 0),
+    remainQuota: asNumber(value.remain_quota, 0),
   }
 }
 

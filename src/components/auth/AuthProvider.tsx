@@ -174,6 +174,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: "",
       status: "游客模式",
       organization: "",
+      quota: 0,
+      usedQuota: 0,
+      requestCount: 0,
     }
 
     const guestToken: TokenRecord = {
@@ -186,6 +189,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       enabled: true,
       usageCount: null,
       supportedModelIds: [],
+      unlimitedQuota: true,
+      usedQuota: 0,
+      remainQuota: 0,
     }
 
     const tokenPage: TokenPage = { page: 1, size: 1, total: 1, items: [guestToken] }

@@ -4,6 +4,7 @@ import { AppLayout } from "@/components/layout/AppLayout"
 import { LoginPage } from "@/components/auth/LoginPage"
 import { AccountConfirmPage } from "@/components/auth/AccountConfirmPage"
 import { ConsolePage } from "@/pages/ConsolePage"
+import { SettingsPage } from "@/pages/SettingsPage"
 import { ToolPage } from "@/pages/ToolPage"
 
 function ProtectedRoute() {
@@ -32,6 +33,7 @@ export default function App() {
             <Route element={<TokenRequiredRoute />}>
               <Route element={<AppLayout />}>
                 <Route path="/console" element={<ConsolePage />} />
+                <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/tools/:toolId" element={<ToolPage />} />
               </Route>
             </Route>

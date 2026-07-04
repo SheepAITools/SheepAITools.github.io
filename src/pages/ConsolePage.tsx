@@ -1,10 +1,12 @@
 import { useNavigate } from "react-router-dom"
-import { AlertCircle, ArrowRight, Sparkles, type LucideIcon } from "lucide-react"
+import { AlertCircle, ArrowRight, BarChart3, Coins, Hash, Mail, Sparkles, UserRound, type LucideIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ModelSelector } from "@/components/models/ModelSelector"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { TOOL_DEFINITIONS } from "@/data/toolDefinitions"
+import { formatQuotaAsUsd } from "@/lib/quota"
 import * as LucideIcons from "lucide-react"
 import type { ToolDefinition } from "@/types/sheepai"
 
@@ -19,9 +21,11 @@ export function ConsolePage() {
   const navigate = useNavigate()
   const hasKey = (selectedToken?.apiKey ?? "").trim().length > 0
   const hasModels = state.availableModels.length > 0
+  const isGuest = state.account?.userId === "guest"
 
   return (
     <div className="space-y-8">
+      {/* Header */}
       <div className="rounded-3xl border border-white/70 bg-white/85 p-6 shadow-xl backdrop-blur-xl sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-3">
@@ -33,10 +37,62 @@ export function ConsolePage() {
         </div>
       </div>
 
+      {/* User info card (non-guest only) */}
+      {!isGuest && state.account && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="border-white/75 bg-white/90 shadow-lg backdrop-blur-xl">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500 flex items-center gap-2"><UserRound className="h-4 w-4" />用户名</CardTitle></CardHeader>
+            <CardContent><p className="text-xl font-bold">{state.account.displayName || state.account.userId}</p></CardContent>
+          </Card>
+          <Card className="border-white/75 bg-white/90 shadow-lg backdrop-blur-xl">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500 flex items-center gap-2"><Mail className="h-4 w-4" />邮箱</CardTitle></CardHeader>
+            <CardContent><p className="text-sm font-medium truncate">{state.account.email || "未绑定"}</p></CardContent>
+          </Card>
+          <Card className="border-white/75 bg-white/90 shadow-lg backdrop-blur-xl">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500 flex items-center gap-2"><Coins className="h-4 w-4" />余额</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xl font-bold text-emerald-600">{formatQuotaAsUsd(state.account.quota)}</p>
+              <p className="text-xs text-slate-400">已用 {formatQuotaAsUsd(state.account.usedQuota)}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-white/75 bg-white/90 shadow-lg backdrop-blur-xl">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500 flex items-center gap-2"><Hash className="h-4 w-4" />请求次数</CardTitle></CardHeader>
+            <CardContent><p className="text-xl font-bold">{state.account.requestCount.toLocaleString()}</p></CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Current token usage */}
+      {selectedToken && (
+        <Card className="border-white/75 bg-white/90 shadow-lg backdrop-blur-xl">
+          <CardContent className="flex flex-wrap items-center gap-6 py-4 text-sm">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-slate-400" />
+              <span className="text-slate-500">当前令牌：</span>
+              <span className="font-semibold">{selectedToken.name}</span>
+            </div>
+            <div>
+              <span className="text-slate-500">已用：</span>
+              <span className="font-semibold text-amber-600">{formatQuotaAsUsd(selectedToken.usedQuota)}</span>
+            </div>
+            {selectedToken.unlimitedQuota ? (
+              <Badge variant="default" className="bg-emerald-100 text-emerald-700">无用量限制</Badge>
+            ) : (
+              <div>
+                <span className="text-slate-500">剩余：</span>
+                <span className="font-semibold text-emerald-600">{formatQuotaAsUsd(selectedToken.remainQuota)}</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Error state */}
       {state.errorMessage && (
         <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>需要处理</AlertTitle><AlertDescription>{state.errorMessage}</AlertDescription></Alert>
       )}
 
+      {/* Tool categories */}
       {(["text", "image", "audio"] as const).map((cat) => {
         const tools = TOOL_DEFINITIONS.filter((t) => t.category === cat)
         if (tools.length === 0) return null
