@@ -18,11 +18,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { ModelSelector } from "@/components/models/ModelSelector"
+import { TokenSelector } from "@/components/models/TokenSelector"
 
 const SHEEPAI_HOME = "https://www.sheepai.top"
 
 export function Navbar() {
-  const { state, selectedToken, logout } = useAuth()
+  const { state, logout } = useAuth()
   const navigate = useNavigate()
 
   return (
@@ -41,11 +42,7 @@ export function Navbar() {
 
         {/* Token & Model selectors */}
         <div className="hidden md:flex items-center gap-2 ml-4">
-          {selectedToken && (
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
-              Token: {selectedToken.name}
-            </span>
-          )}
+          <TokenSelector />
           <ModelSelector />
         </div>
 
