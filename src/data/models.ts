@@ -4,29 +4,24 @@ import type { ModelDefinition, ModelFamily, ModelProvider, ProviderGroup } from 
 // ============ Latest recommended models (July 2026) ============
 
 export const RECOMMENDED_MODEL_IDS = new Set([
-  // Anthropic
+  // Anthropic — latest Mythos + Opus
   "claude-fable-5", "claude-mythos-5", "claude-opus-4-8", "claude-opus-4-7",
-  "claude-sonnet-5", "claude-sonnet-4-5-20250915", "claude-haiku-4-5-20251001",
-  // OpenAI
+  // OpenAI — GPT-5.5 series
   "gpt-5.5", "gpt-5.5-pro", "gpt-5.5-instant", "gpt-5.5-mini",
-  "gpt-5", "gpt-5-pro", "gpt-5-mini-2025-08-07", "o4-mini", "o3-pro",
-  // DeepSeek
-  "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-pro[1m]",
-  "deepseek-v4", "deepseek-v3-1-250821", "deepseek-r1-0528",
-  // Qwen
-  "qwen3.7-max", "qwen3.7-plus", "qwen3-max", "qwen3.6-max-preview",
-  "qwen3-coder-plus", "qwq-max-latest",
-  // Kimi
-  "kimi-k2.7", "kimi-k2.6", "kimi-k2.5", "kimi-k2",
-  // GLM
-  "glm-5.2", "glm-5", "glm-4.6",
+  // DeepSeek — V4 series
+  "deepseek-v4-pro", "deepseek-v4-pro[1m]", "deepseek-v4-flash", "deepseek-v4",
+  // Qwen — 3.7 series
+  "qwen3.7-max", "qwen3.7-plus", "qwen3-coder-plus",
+  // Kimi — K2.7 / K2.6
+  "kimi-k2.7", "kimi-k2.6",
+  // GLM — 5 series
+  "glm-5.2", "glm-5",
   // Grok
   "grok-4", "grok-4-fast-reasoning",
   // MiniMax
-  "MiniMax-M2.7", "MiniMax-M2.5",
+  "MiniMax-M2.7",
   // Image models
-  "gpt-image-1", "gpt-image-2", "qwen-image-max-2025-12-30",
-  "wan2.7-image-pro", "grok-imagine-image-pro",
+  "gpt-image-2", "qwen-image-max-2025-12-30", "wan2.7-image-pro",
   // TTS
   "tts-1", "gpt-4o-mini-tts",
 ])

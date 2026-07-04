@@ -209,6 +209,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (nextModel) saveLastModelId(nextModel.id)
 
       dispatch({ type: "LOGIN_SUCCESS", account: guestAccount, tokens: tokenPage })
+      dispatch({ type: "SELECT_TOKEN_START", tokenId: "guest-token" })
+      dispatch({ type: "SET_SELECTED_MODEL", modelId: nextModel?.id ?? "" })
       dispatch({ type: "SELECT_TOKEN_SUCCESS", models, rawModels: [], usage: { ...EMPTY_USAGE, tokenId: "guest-token" } })
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "无法查询模型，请检查 API 令牌是否正确。"
