@@ -93,6 +93,7 @@ interface AuthContextValue {
   selectedModel: ModelDefinition | undefined
   setCredentials: (userId: string, systemToken: string, rememberUserId: boolean) => void
   login: (userId: string, systemToken: string, rememberUserId: boolean) => Promise<void>
+  guestLogin: (apiKey: string) => Promise<void>
   selectToken: (token: TokenRecord) => Promise<void>
   selectModel: (modelId: string) => void
   clearError: () => void
@@ -158,6 +159,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const guestLogin = useCallback(async (apiKey: string) => {
+    const trimmedKey = apiKey.trim()
+    if (!trimmedKey) {
+      dispatch({ type: "LOGIN_FAIL", message: "请输入 API 令牌。" })
+      return
+    }
+
+    dispatch({ type: "LOGIN_START" })
+
+    const guestAccount: AccountInfo = {
+      userId: "guest",
+      displayName: "游客",
+      email: "",
+      status: "游客模式",
+      organization: "",
+    }
+
+    const guestToken: TokenRecord = {
+      id: "guest-token",
+      name: "游客令牌",
+      tokenType: "API Key",
+      apiKey: trimmedKey,
+      description: "直接使用 API 令牌调用",
+      expiresAt: "",
+      enabled: true,
+      usageCount: null,
+      supportedModelIds: [],
+    }
+
+    const tokenPage: TokenPage = { page: 1, size: 1, total: 1, items: [guestToken] }
+
+    try {
+      const models = await getTokenModels({
+        userId: "guest",
+        systemToken: trimmedKey,
+        token: guestToken,
+      })
+
+      saveUserId("guest")
+
+      const nextModel = models[0]
+      if (nextModel) saveLastModelId(nextModel.id)
+
+      dispatch({ type: "LOGIN_SUCCESS", account: guestAccount, tokens: tokenPage })
+      dispatch({ type: "SELECT_TOKEN_SUCCESS", models, rawModels: [], usage: { ...EMPTY_USAGE, tokenId: "guest-token" } })
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "无法查询模型，请检查 API 令牌是否正确。"
+      dispatch({ type: "LOGIN_FAIL", message: msg })
+    }
+  }, [])
+
   const selectToken = useCallback(async (token: TokenRecord) => {
     const trimmedUserId = state.userId.trim()
     const trimmedToken = state.systemToken.trim()
@@ -216,7 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthContextValue = useMemo(() => ({
     state, selectedToken, selectedModel,
-    setCredentials, login, selectToken, selectModel,
+    setCredentials, login, guestLogin, selectToken, selectModel,
     clearError, logout, refreshTokens,
     hasCredentials, isAuthenticated,
   }), [state, selectedToken, selectedModel, setCredentials, login, selectToken, selectModel, clearError, logout, refreshTokens, hasCredentials, isAuthenticated])

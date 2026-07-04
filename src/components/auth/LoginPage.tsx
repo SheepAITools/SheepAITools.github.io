@@ -2,40 +2,52 @@ import { type ChangeEvent, type FormEvent, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   AlertCircle, ArrowRight, Copy, ExternalLink, KeyRound,
-  Loader2, LockKeyhole, Sparkles, UserRound,
+  Loader2, LockKeyhole, Sparkles, UserRound, Zap,
 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { useAuth } from "@/components/auth/AuthProvider"
+import { cn } from "@/lib/utils"
 
 const SHEEPAI_HOME = "https://www.sheepai.top"
 const SHEEPAI_DOCS = "https://sheepai.apifox.cn/"
 
 export function LoginPage() {
-  const { state, setCredentials, login } = useAuth()
+  const { state, setCredentials, login, guestLogin } = useAuth()
   const navigate = useNavigate()
+  const [loginMode, setLoginMode] = useState<"system" | "guest">("system")
   const [userId, setUserId] = useState(state.userId || "")
   const [systemToken, setSystemToken] = useState("")
+  const [apiKey, setApiKey] = useState("")
   const [rememberUserId, setRememberUserId] = useState(true)
 
-  const hasInput = userId.trim().length > 0 && systemToken.trim().length > 0
+  const hasInput = loginMode === "system"
+    ? userId.trim().length > 0 && systemToken.trim().length > 0
+    : apiKey.trim().length > 0
 
   // Redirect after successful login
   useEffect(() => {
-    if (state.account && state.tokenPage.items.length > 0) {
+    if (!state.account) return
+    if (state.account.userId === "guest" || state.availableModels.length > 0) {
+      navigate("/console", { replace: true })
+    } else if (state.tokenPage.items.length > 0) {
       navigate("/account-confirm", { replace: true })
     }
-  }, [state.account, state.tokenPage.items.length, navigate])
+  }, [state.account, state.tokenPage.items.length, state.availableModels.length, navigate])
 
   async function handleSubmit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault()
-    setCredentials(userId, systemToken, rememberUserId)
-    await login(userId, systemToken, rememberUserId)
+    if (loginMode === "system") {
+      setCredentials(userId, systemToken, rememberUserId)
+      await login(userId, systemToken, rememberUserId)
+    } else {
+      await guestLogin(apiKey)
+    }
   }
 
   return (
@@ -84,55 +96,79 @@ export function LoginPage() {
 
           <Card className="border-white/15 bg-white/95 text-slate-950 shadow-2xl shadow-black/30 backdrop-blur-xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-2xl">
-                <LockKeyhole className="h-5 w-5" />
-                登录工具箱
-              </CardTitle>
+              {/* Login mode tabs */}
+              <div className="flex rounded-xl bg-slate-100 p-1 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setLoginMode("system")}
+                  className={cn("flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all",
+                    loginMode === "system" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                >
+                  <LockKeyhole className="h-4 w-4" />系统令牌登录
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLoginMode("guest")}
+                  className={cn("flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all",
+                    loginMode === "guest" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                >
+                  <Zap className="h-4 w-4" />游客登录
+                </button>
+              </div>
               <CardDescription>
-                系统令牌只用于查询账号与令牌列表；模型调用使用下一步选择的 API Key。
+                {loginMode === "system"
+                  ? "系统令牌只用于查询账号与令牌列表；模型调用使用下一步选择的 API Key。"
+                  : "直接使用 API 令牌调用模型，无需注册 SheepAI 账号。"}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form className="space-y-5" onSubmit={handleSubmit}>
-                <div className="space-y-2">
-                  <Label htmlFor="user-id" className="flex items-center gap-2">
-                    <UserRound className="h-3.5 w-3.5" />用户 ID
-                  </Label>
-                  <div className="relative">
-                    <Input id="user-id" value={userId} onChange={(e: ChangeEvent<HTMLInputElement>) => setUserId(e.target.value)}
-                      placeholder="在 SheepAI 个人设置中复制" autoComplete="username" className="h-12 bg-white text-base pr-10" />
-                    <button type="button" onClick={() => navigator.clipboard.readText().then(t => { if (t) setUserId(t) }).catch(() => {})}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" title="从剪贴板粘贴">
-                      <Copy className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-400">SheepAI 控制台 → 个人设置 → 用户名旁边可查看并复制</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="system-token" className="flex items-center gap-2">
-                    <KeyRound className="h-3.5 w-3.5" />系统令牌
-                  </Label>
-                  <Input id="system-token" type="password" value={systemToken}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setSystemToken(e.target.value)}
-                    placeholder="安全设置中生成的系统令牌" autoComplete="off" className="h-12 bg-white text-base" />
-                  <p className="text-xs text-slate-400">SheepAI 控制台 → 个人设置 → 安全设置 → 生成并复制</p>
-                </div>
-
-                <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <div>
-                    <Label htmlFor="remember-user-id" className="text-sm font-semibold">仅记住用户 ID</Label>
-                    <p className="mt-1 text-xs text-slate-500">不会保存系统令牌或 API Key。</p>
-                  </div>
-                  <Switch id="remember-user-id" checked={rememberUserId} onCheckedChange={setRememberUserId} />
-                </div>
-
-                <div className="grid gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                  <div><span className="font-semibold text-slate-950">用户 ID：</span>SheepAI 控制台 → 个人设置 → 用户名旁边可复制。</div>
-                  <div><span className="font-semibold text-slate-950">系统令牌：</span>SheepAI 控制台 → 个人设置 → 安全设置 → 生成并复制。</div>
-                  <div><span className="font-semibold text-slate-950">API Key：</span>登录后由系统 API 返回，用于模型调用；不要把系统令牌当作 API Key。</div>
-                  <div><span className="font-semibold text-slate-950">浏览器访问：</span>请通过 HTTPS 或 <code className="rounded bg-slate-200 px-1 text-xs">npm run dev</code> 访问。</div>
-                </div>
+                {loginMode === "system" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="user-id" className="flex items-center gap-2"><UserRound className="h-3.5 w-3.5" />用户 ID</Label>
+                      <div className="relative">
+                        <Input id="user-id" value={userId} onChange={(e: ChangeEvent<HTMLInputElement>) => setUserId(e.target.value)}
+                          placeholder="在 SheepAI 个人设置中复制" autoComplete="username" className="h-12 bg-white text-base pr-10" />
+                        <button type="button" onClick={() => navigator.clipboard.readText().then(t => { if (t) setUserId(t) }).catch(() => {})}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" title="从剪贴板粘贴">
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-400">SheepAI 控制台 → 个人设置 → 用户名旁边可查看并复制</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="system-token" className="flex items-center gap-2"><KeyRound className="h-3.5 w-3.5" />系统令牌</Label>
+                      <Input id="system-token" type="password" value={systemToken}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => setSystemToken(e.target.value)}
+                        placeholder="安全设置中生成的系统令牌" autoComplete="off" className="h-12 bg-white text-base" />
+                      <p className="text-xs text-slate-400">SheepAI 控制台 → 个人设置 → 安全设置 → 生成并复制</p>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div><Label htmlFor="remember-user-id" className="text-sm font-semibold">仅记住用户 ID</Label><p className="mt-1 text-xs text-slate-500">不会保存系统令牌或 API Key。</p></div>
+                      <Switch id="remember-user-id" checked={rememberUserId} onCheckedChange={setRememberUserId} />
+                    </div>
+                    <div className="grid gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                      <div><span className="font-semibold text-slate-950">用户 ID：</span>SheepAI 控制台 → 个人设置 → 用户名旁边可复制。</div>
+                      <div><span className="font-semibold text-slate-950">系统令牌：</span>SheepAI 控制台 → 个人设置 → 安全设置 → 生成并复制。</div>
+                      <div><span className="font-semibold text-slate-950">API Key：</span>登录后由系统 API 返回，用于模型调用。</div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="guest-api-key" className="flex items-center gap-2"><KeyRound className="h-3.5 w-3.5" />API 令牌</Label>
+                      <Input id="guest-api-key" type="password" value={apiKey}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => setApiKey(e.target.value)}
+                        placeholder="输入您的 SheepAI API Key" autoComplete="off" className="h-12 bg-white text-base" />
+                    </div>
+                    <div className="grid gap-3 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                      <div><span className="font-semibold text-amber-950">游客模式：</span>仅需 API 令牌即可使用工具，无需注册 SheepAI 账号。</div>
+                      <div><span className="font-semibold text-amber-950">令牌获取：</span>SheepAI 控制台 → API 令牌 → 创建或复制已有令牌。</div>
+                      <div><span className="font-semibold text-amber-950">注意：</span>游客模式下无法切换令牌，功能与系统令牌登录一致。</div>
+                    </div>
+                  </>
+                )}
 
                 {state.loginMessage && (
                   <Alert variant="destructive">
@@ -144,7 +180,7 @@ export function LoginPage() {
 
                 <Button type="submit" size="lg" className="h-12 w-full" disabled={!hasInput || state.isLoadingAccount}>
                   {state.isLoadingAccount ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                  {state.isLoadingAccount ? "正在查询账号..." : "查询账号并继续"}
+                  {state.isLoadingAccount ? "正在验证..." : loginMode === "system" ? "查询账号并继续" : "直接进入控制台"}
                 </Button>
 
                 <p className="text-center text-xs leading-5 text-slate-500">

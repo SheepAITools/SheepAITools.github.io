@@ -17,6 +17,16 @@ export function TokenSelector() {
 
   if (state.tokenPage.items.length === 0) return null
 
+  // Single token (e.g., guest mode): show as static badge, no dropdown needed
+  if (state.tokenPage.items.length === 1) {
+    return (
+      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500 flex items-center gap-1">
+        <KeyRound className="h-3 w-3" />
+        {selectedToken?.name ?? "API Token"}
+      </span>
+    )
+  }
+
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
