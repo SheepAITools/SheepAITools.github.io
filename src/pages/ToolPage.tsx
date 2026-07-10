@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ModelSelector } from "@/components/models/ModelSelector"
 import { useApiConfig } from "@/components/config/useApiConfig"
 import { getToolById } from "@/data/toolDefinitions"
-import { normalizeToolImageOutput, runConfiguredTool } from "@/lib/genericAiClient"
+import { normalizeToolImageOutput, resolveConfiguredToolEndpoint, runConfiguredTool } from "@/lib/genericAiClient"
 import { maskSecret } from "@/lib/display"
 import { cn } from "@/lib/utils"
 import type { RunToolResponse } from "@/types/sheepai"
@@ -48,6 +48,7 @@ export function ToolPage() {
   const needsImage = tool.supportsImageInput
   const producesImage = tool.supportsImageOutput
   const isTts = tool.category === "audio"
+  const displayEndpoint = activeModel ? resolveConfiguredToolEndpoint(activeModel, tool) : ""
 
   function handleFile(file: File) {
     if (!file.type.startsWith("image/")) { setError("请选择图片文件（PNG、JPG、WebP）"); return }
@@ -121,7 +122,7 @@ export function ToolPage() {
             <CardContent className="space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                 <p className="font-semibold text-slate-950">模型：{activeModel?.id ?? "未选择"}</p>
-                <p className="mt-2 break-all font-mono text-xs text-slate-500">{activeModel ? `${activeModel.baseUrl}${activeModel.requestPath}` : "未选择"}</p>
+                <p className="mt-2 break-all font-mono text-xs text-slate-500">{displayEndpoint || "未选择"}</p>
                 <p className="mt-2 text-xs">API Key：{maskSecret(activeConfig?.apiKey ?? "")}</p>
               </div>
               <Button variant="outline" className="w-full" onClick={() => navigate("/settings")}>配置 API</Button>

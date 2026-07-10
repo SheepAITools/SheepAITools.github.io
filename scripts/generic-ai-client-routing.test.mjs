@@ -25,6 +25,8 @@ await build({
 const module = await import(`${outfile}?t=${Date.now()}`)
 const {
   resolveOpenAiToolEndpoint,
+  resolveConfiguredToolEndpoint,
+  resolveOpenAiConnectivityEndpoint,
   buildOpenAiToolPayload,
   resolveGeminiEndpoint,
   buildGeminiPayload,
@@ -75,10 +77,38 @@ test("routes OpenAI-compatible image generation tools to image generations", () 
   )
 })
 
+test("resolves configured tool endpoint for OpenAI-compatible image generation", () => {
+  assert.equal(
+    resolveConfiguredToolEndpoint({
+      ...openAiModel,
+      provider: "openai-compatible",
+    }, imageGenerateTool),
+    "https://api.example.test/v1/images/generations",
+  )
+})
+
 test("routes OpenAI-compatible image edit tools to image edits", () => {
   assert.equal(
     resolveOpenAiToolEndpoint(openAiModel, imageEditTool),
     "https://api.example.test/v1/images/edits",
+  )
+})
+
+test("resolves OpenAI-compatible connectivity endpoint to models", () => {
+  assert.equal(
+    resolveOpenAiConnectivityEndpoint("https://api.example.test/v1"),
+    "https://api.example.test/v1/models",
+  )
+})
+
+test("strips concrete OpenAI-compatible paths before resolving connectivity endpoint", () => {
+  assert.equal(
+    resolveOpenAiConnectivityEndpoint("https://api.example.test/v1/chat/completions"),
+    "https://api.example.test/v1/models",
+  )
+  assert.equal(
+    resolveOpenAiConnectivityEndpoint("https://api.example.test/v1/images/generations"),
+    "https://api.example.test/v1/models",
   )
 })
 

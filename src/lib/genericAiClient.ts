@@ -66,6 +66,10 @@ export function resolveOpenAiToolEndpoint(model: ModelDefinition, tool: ToolDefi
   return buildEndpoint(model.baseUrl, model.requestPath)
 }
 
+export function resolveOpenAiConnectivityEndpoint(baseUrl: string): string {
+  return buildEndpoint(stripKnownEndpointSuffix(baseUrl), "/models")
+}
+
 export function buildOpenAiJsonHeaders(apiKey: string): Record<string, string> {
   return {
     Accept: "application/json",
@@ -169,6 +173,12 @@ export function resolveGeminiEndpoint(model: ModelDefinition): string {
     return `${baseUrl}:generateContent`
   }
   return `${baseUrl}/${modelPath}:generateContent`
+}
+
+export function resolveConfiguredToolEndpoint(model: ModelDefinition, tool: ToolDefinition): string {
+  if (model.provider === "gemini-compatible") return resolveGeminiEndpoint(model)
+  if (model.provider === "anthropic-compatible") return buildEndpoint(model.baseUrl, model.requestPath)
+  return resolveOpenAiToolEndpoint(model, tool)
 }
 
 export function buildGeminiPayload(request: Pick<RunToolRequest, "model" | "tool" | "inputText" | "imageBase64" | "imageMimeType">): Record<string, unknown> {
@@ -356,6 +366,22 @@ export async function runConnectivityTest(config: ApiConfiguration): Promise<voi
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "ping" }] }] }),
+      signal: timeoutSignal(config.timeoutSeconds),
+    }).catch((error: unknown) => {
+      throw normalizeFetchError(error, config.timeoutSeconds)
+    })
+
+    if (!response.ok) throw new Error(await parseErrorResponse(response))
+    return
+  }
+
+  if (config.interfaceFormat === "openai-compatible") {
+    const response = await fetch(resolveOpenAiConnectivityEndpoint(config.apiBaseUrl), {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: buildAuthorizationHeader(config.apiKey),
+      },
       signal: timeoutSignal(config.timeoutSeconds),
     }).catch((error: unknown) => {
       throw normalizeFetchError(error, config.timeoutSeconds)

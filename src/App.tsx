@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom"
 import { ApiConfigProvider } from "@/components/config/ApiConfigProvider"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { ConsolePage } from "@/pages/ConsolePage"
@@ -8,7 +8,7 @@ import { Toaster } from "@/components/ui/sonner"
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <ApiConfigProvider>
         <Routes>
           <Route element={<AppLayout />}>
@@ -21,6 +21,6 @@ export default function App() {
         </Routes>
         <Toaster />
       </ApiConfigProvider>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
