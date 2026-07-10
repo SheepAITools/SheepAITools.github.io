@@ -2,10 +2,9 @@ import { Link, useNavigate } from "react-router-dom"
 import {
   ChevronDown,
   ExternalLink,
-  LogOut,
+  KeyRound,
   Settings,
   Sparkles,
-  UserRound,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,17 +12,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useAuth } from "@/components/auth/AuthProvider"
+import { useApiConfig } from "@/components/config/useApiConfig"
 import { ModelSelector } from "@/components/models/ModelSelector"
-import { TokenSelector } from "@/components/models/TokenSelector"
 
 const SHEEPAI_HOME = "https://www.sheepai.top"
 
 export function Navbar() {
-  const { state, logout } = useAuth()
+  const { state, activeConfig, selectConfig } = useApiConfig()
   const navigate = useNavigate()
 
   return (
@@ -42,7 +39,25 @@ export function Navbar() {
 
         {/* Token & Model selectors */}
         <div className="hidden md:flex items-center gap-2 ml-4">
-          <TokenSelector />
+          {state.configs.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1 max-w-[180px]">
+                  <KeyRound className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                  <span className="truncate text-xs">{activeConfig?.name ?? "API 配置"}</span>
+                  <ChevronDown className="h-3 w-3 shrink-0" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuLabel>切换 API 配置</DropdownMenuLabel>
+                {state.configs.map((config) => (
+                  <DropdownMenuItem key={config.id} onClick={() => selectConfig(config.id)}>
+                    <span className="truncate">{config.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <ModelSelector />
         </div>
 
@@ -57,34 +72,9 @@ export function Navbar() {
             </a>
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-1">
-                <UserRound className="h-4 w-4" />
-                <span className="hidden sm:inline max-w-[100px] truncate">
-                  {state.account?.displayName || state.account?.userId || "用户"}
-                </span>
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>
-                <div className="text-xs text-slate-500">已登录账号</div>
-                <div className="font-medium">{state.account?.displayName || state.userId}</div>
-                {state.account?.email && <div className="text-xs text-slate-400">{state.account.email}</div>}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate("/settings")}>
-                <Settings className="h-4 w-4 mr-2" />
-                设置
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout} className="text-red-600">
-                <LogOut className="h-4 w-4 mr-2" />
-                退出登录
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button variant="ghost" size="icon" onClick={() => navigate("/settings")} aria-label="设置">
+            <Settings className="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </header>

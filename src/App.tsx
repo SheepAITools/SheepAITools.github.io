@@ -1,46 +1,26 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom"
-import { AuthProvider, useAuth } from "@/components/auth/AuthProvider"
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { ApiConfigProvider } from "@/components/config/ApiConfigProvider"
 import { AppLayout } from "@/components/layout/AppLayout"
-import { LoginPage } from "@/components/auth/LoginPage"
-import { AccountConfirmPage } from "@/components/auth/AccountConfirmPage"
 import { ConsolePage } from "@/pages/ConsolePage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { ToolPage } from "@/pages/ToolPage"
-
-function ProtectedRoute() {
-  const { state } = useAuth()
-  if (!state.account && !state.isLoadingAccount) return <Navigate to="/" replace />
-  return <Outlet />
-}
-
-function TokenRequiredRoute() {
-  const { state, selectedToken } = useAuth()
-  if (!state.account) return <Navigate to="/" replace />
-  if (!selectedToken && !state.isLoadingModels && state.availableModels.length === 0) {
-    return <Navigate to="/account-confirm" replace />
-  }
-  return <Outlet />
-}
+import { Toaster } from "@/components/ui/sonner"
 
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
+      <ApiConfigProvider>
         <Routes>
-          <Route path="/" element={<LoginPage />} />
-          <Route element={<ProtectedRoute />}>
-            <Route path="/account-confirm" element={<AccountConfirmPage />} />
-            <Route element={<TokenRequiredRoute />}>
-              <Route element={<AppLayout />}>
-                <Route path="/console" element={<ConsolePage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/tools/:toolId" element={<ToolPage />} />
-              </Route>
-            </Route>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Navigate to="/console" replace />} />
+            <Route path="/console" element={<ConsolePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/tools/:toolId" element={<ToolPage />} />
           </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/console" replace />} />
         </Routes>
-      </AuthProvider>
+        <Toaster />
+      </ApiConfigProvider>
     </BrowserRouter>
   )
 }

@@ -4,7 +4,7 @@ export function formatNullableText(value: string): string {
 
 export function maskSecret(value: string): string {
   const trimmed = value.trim()
-  if (trimmed.length === 0) return "未返回明文"
+  if (trimmed.length === 0) return "未填写"
   if (trimmed.length <= 12) return `${trimmed.slice(0, 3)}••••`
   return `${trimmed.slice(0, 6)}••••${trimmed.slice(-4)}`
 }

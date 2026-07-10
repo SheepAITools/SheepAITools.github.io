@@ -1,6 +1,7 @@
 // ============ Model types ============
 
 export type ModelProvider = "openai-compatible" | "anthropic-compatible"
+export type ApiInterfaceFormat = ModelProvider
 
 export type ModelFamily = "GPT" | "Claude" | "Qwen" | "DeepSeek" | "GLM" | "Gemini" | "Llama" | "Grok" | "Kimi" | "MiniMax" | "Other"
 
@@ -35,6 +36,19 @@ export interface ModelDefinition {
   tags: string[]
   /** API 端点类型 */
   endpointTypes: string[]
+}
+
+export interface ApiConfiguration {
+  id: string
+  name: string
+  apiBaseUrl: string
+  apiKey: string
+  interfaceFormat: ApiInterfaceFormat
+  modelIds: string[]
+  timeoutSeconds: number
+  selectedModelId: string
+  createdAt: number
+  updatedAt: number
 }
 
 /** 供应商分组 */
@@ -124,6 +138,7 @@ export interface RunToolRequest {
   model: ModelDefinition
   tool: ToolDefinition
   inputText: string
+  timeoutSeconds?: number
   /** 可选的图片 base64 数据 */
   imageBase64?: string
   /** 图片 MIME 类型 */

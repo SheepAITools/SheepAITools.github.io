@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useAuth } from "@/components/auth/AuthProvider"
+import { useApiConfig } from "@/components/config/useApiConfig"
 import { groupModelsByProvider, getProviderName, filterModelsForTool } from "@/data/models"
 import { cn } from "@/lib/utils"
 import type { ModelDefinition, ProviderGroup } from "@/types/sheepai"
@@ -43,13 +43,13 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({ toolModelFilter, className }: ModelSelectorProps) {
-  const { state, selectModel, selectedModel } = useAuth()
+  const { availableModels, selectModel, activeModel } = useApiConfig()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
   const { filtered, recommended, groups, incompatibleCount } = useMemo(() => {
-    let all = state.availableModels
+    let all = availableModels
     const allCount = all.length
 
     // Filter by tool type
@@ -77,7 +77,7 @@ export function ModelSelector({ toolModelFilter, className }: ModelSelectorProps
     const incompatibleCount = toolModelFilter ? allCount - all.length : 0
 
     return { filtered: searched, recommended: recs, groups, incompatibleCount }
-  }, [state.availableModels, toolModelFilter, search])
+  }, [availableModels, toolModelFilter, search])
 
   // Auto-collapse large groups
   const displayGroups = useMemo(() => {
@@ -100,17 +100,17 @@ export function ModelSelector({ toolModelFilter, className }: ModelSelectorProps
     })
   }
 
-  if (state.availableModels.length === 0) {
+  if (availableModels.length === 0) {
     return <Button variant="outline" size="sm" disabled className={className}>暂无可用模型</Button>
   }
 
-  const totalAvailable = state.availableModels.length
+  const totalAvailable = availableModels.length
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className={cn("gap-1 max-w-[220px]", className)}>
-          <span className="truncate text-xs">{selectedModel?.id ?? "选择模型"}</span>
+          <span className="truncate text-xs">{activeModel?.id ?? "选择模型"}</span>
           <ChevronDown className="h-3 w-3 shrink-0 ml-auto" />
         </Button>
       </DropdownMenuTrigger>
@@ -145,7 +145,7 @@ export function ModelSelector({ toolModelFilter, className }: ModelSelectorProps
               <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">
                 推荐模型 · {recommended.length}
               </div>
-              {recommended.map((model: ModelDefinition) => renderModelRow(model, selectedModel, selectModel, () => setOpen(false)))}
+              {recommended.map((model: ModelDefinition) => renderModelRow(model, activeModel, selectModel, () => setOpen(false)))}
             </div>
           )}
 
@@ -167,7 +167,7 @@ export function ModelSelector({ toolModelFilter, className }: ModelSelectorProps
                   <span className="font-normal text-slate-300 ml-1">({group.models.length})</span>
                 </button>
                 {!group.collapsed && group.models.map((model: ModelDefinition) =>
-                  renderModelRow(model, selectedModel, selectModel, () => setOpen(false))
+                  renderModelRow(model, activeModel, selectModel, () => setOpen(false))
                 )}
               </div>
             ))

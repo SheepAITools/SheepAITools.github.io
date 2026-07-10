@@ -1,5 +1,5 @@
 import { CLAUDE_BASE_URL, GPT_BASE_URL } from "@/lib/sheepaiConfig"
-import type { ModelDefinition, ModelFamily, ModelProvider, ProviderGroup } from "@/types/sheepai"
+import type { ApiInterfaceFormat, ModelDefinition, ModelFamily, ModelProvider, ProviderGroup } from "@/types/sheepai"
 
 // ============ Latest recommended models (July 2026) ============
 
@@ -157,28 +157,34 @@ export function buildModelFromRaw(raw: {
 
 // ============ Build from model ID string (fallback) ============
 
-function buildFallbackModel(modelId: string): ModelDefinition {
-  const provider = inferModelProvider(modelId, ["openai"])
+interface BuildModelOptionsParams {
+  apiBaseUrl?: string
+  interfaceFormat?: ApiInterfaceFormat
+}
+
+function buildFallbackModel(modelId: string, params: BuildModelOptionsParams = {}): ModelDefinition {
+  const provider = params.interfaceFormat ?? inferModelProvider(modelId, ["openai"])
+  const endpointTypes = provider === "anthropic-compatible" ? ["anthropic"] : ["openai"]
   return {
     id: modelId,
     label: modelId,
     provider,
     family: inferModelFamily(modelId, "custom"),
-    baseUrl: getBaseUrl(provider),
+    baseUrl: params.apiBaseUrl?.trim().replace(/\/+$/, "") || getBaseUrl(provider),
     requestPath: getRequestPath(provider),
-    description: "由 API Key 返回。具体能力请以 SheepAI 控制台为准。",
+    description: "由当前 API 配置提供。",
     defaultTemperature: 0.3,
     enabled: true,
     ownedBy: "custom",
     modelType: "文本",
     tags: ["对话"],
-    endpointTypes: ["openai"],
+    endpointTypes,
   }
 }
 
-export function buildModelOptions(modelIds: string[]): ModelDefinition[] {
+export function buildModelOptions(modelIds: string[], params: BuildModelOptionsParams = {}): ModelDefinition[] {
   return [...new Set(modelIds.map((m) => m.trim()).filter(Boolean))]
-    .map(buildFallbackModel)
+    .map((modelId) => buildFallbackModel(modelId, params))
 }
 
 // ============ Group models: by model_type → provider ============
@@ -235,6 +241,7 @@ export function groupModelsByProvider(models: ModelDefinition[]): ProviderGroup[
 
 export function filterModelsForTool(models: ModelDefinition[], toolModelFilter?: string): ModelDefinition[] {
   if (!toolModelFilter) return models.filter((m) => m.enabled)
+  if (models.every((m) => m.ownedBy === "custom")) return models.filter((m) => m.enabled)
 
   return models.filter((m) => {
     if (!m.enabled) return false

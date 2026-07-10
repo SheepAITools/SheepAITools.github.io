@@ -26,17 +26,20 @@ interface AnthropicMessagesResponse {
   }
 }
 
-function buildEndpoint(baseUrl: string, requestPath: string): string {
+export function buildEndpoint(baseUrl: string, requestPath: string): string {
   const normalizedBaseUrl: string = baseUrl.replace(/\/$/, "")
   const normalizedPath: string = requestPath.startsWith("/") ? requestPath : `/${requestPath}`
+  if (normalizedBaseUrl.endsWith(normalizedPath)) {
+    return normalizedBaseUrl
+  }
   return `${normalizedBaseUrl}${normalizedPath}`
 }
 
-function buildAuthorizationHeader(apiKey: string): string {
+export function buildAuthorizationHeader(apiKey: string): string {
   return `Bearer ${apiKey.trim().replace(/^bearer\s+/i, "").trim()}`
 }
 
-async function parseErrorResponse(response: Response): Promise<string> {
+export async function parseErrorResponse(response: Response): Promise<string> {
   const fallbackMessage: string = `请求失败：HTTP ${response.status}`
 
   try {
@@ -63,7 +66,7 @@ async function parseErrorResponse(response: Response): Promise<string> {
   }
 }
 
-function extractOpenAiContent(body: OpenAiChatCompletionResponse): string {
+export function extractOpenAiContent(body: OpenAiChatCompletionResponse): string {
   const content: string = body.choices?.[0]?.message?.content?.trim() ?? ""
   if (content.length === 0) {
     const apiErrorMessage: string = body.error?.message ?? "OpenAI 兼容接口未返回可展示内容。"
@@ -72,7 +75,7 @@ function extractOpenAiContent(body: OpenAiChatCompletionResponse): string {
   return content
 }
 
-function extractAnthropicContent(body: AnthropicMessagesResponse): string {
+export function extractAnthropicContent(body: AnthropicMessagesResponse): string {
   const textBlocks: string[] = body.content
     ?.filter((block) => block.type === "text" && typeof block.text === "string")
     .map((block) => block.text ?? "") ?? []

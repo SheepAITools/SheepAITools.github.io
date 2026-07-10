@@ -10,9 +10,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { ModelSelector } from "@/components/models/ModelSelector"
-import { useAuth } from "@/components/auth/AuthProvider"
+import { useApiConfig } from "@/components/config/useApiConfig"
 import { getToolById } from "@/data/toolDefinitions"
-import { runSheepAiTool } from "@/lib/sheepaiClient"
+import { runConfiguredTool } from "@/lib/genericAiClient"
 import { maskSecret } from "@/lib/display"
 import { cn } from "@/lib/utils"
 import type { RunToolResponse } from "@/types/sheepai"
@@ -20,7 +20,7 @@ import type { RunToolResponse } from "@/types/sheepai"
 export function ToolPage() {
   const { toolId } = useParams<{ toolId: string }>()
   const navigate = useNavigate()
-  const { selectedToken, selectedModel } = useAuth()
+  const { activeConfig, activeModel, hasRunnableConfig } = useApiConfig()
   const tool = toolId ? getToolById(toolId) : undefined
 
   const [inputText, setInputText] = useState(tool?.defaultInput ?? "")
@@ -45,7 +45,6 @@ export function ToolPage() {
     )
   }
 
-  const hasApiKey = (selectedToken?.apiKey ?? "").trim().length > 0
   const needsImage = tool.supportsImageInput
   const producesImage = tool.supportsImageOutput
   const isTts = tool.category === "audio"
@@ -67,14 +66,15 @@ export function ToolPage() {
   function clearImage() { setImageData(null); setOutputImage(null) }
 
   async function handleRun() {
-    if (!selectedToken || !selectedModel || !tool) { setError("请先选择 API Key 和模型"); return }
+    if (!activeConfig || !activeModel || !tool) { setError("请先完成 API 配置。"); return }
     setIsRunning(true); setError(""); setOutputText(""); setOutputImage(null); setOutputAudio(null); setEndpoint("")
     try {
       const base64 = imageData ? imageData.split(",")[1] : undefined
-      const result: RunToolResponse = await runSheepAiTool({
-        apiKey: selectedToken.apiKey, model: selectedModel, tool,
+      const result: RunToolResponse = await runConfiguredTool({
+        apiKey: activeConfig.apiKey, model: activeModel, tool,
         inputText: inputText || tool.defaultInput,
         imageBase64: base64, imageMimeType: imageMime,
+        timeoutSeconds: activeConfig.timeoutSeconds,
       })
       setOutputText(result.content)
       if (result.imageData) {
@@ -106,7 +106,7 @@ export function ToolPage() {
           <Badge variant="secondary">{tool.category === "text" ? "文本" : tool.category === "image" ? "图像" : "音频"}</Badge>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline">{selectedToken?.name ?? "未选择 Token"}</Badge>
+          <Badge variant="outline">{activeConfig?.name ?? "未配置 API"}</Badge>
           <ModelSelector toolModelFilter={tool.modelFilter} />
         </div>
       </div>
@@ -120,17 +120,19 @@ export function ToolPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                <p className="font-semibold text-slate-950">模型：{selectedModel?.id ?? "未选择"}</p>
-                <p className="mt-2 break-all font-mono text-xs text-slate-500">{selectedModel ? `${selectedModel.baseUrl}${selectedModel.requestPath}` : "未选择"}</p>
-                <p className="mt-2 text-xs">API Key：{maskSecret(selectedToken?.apiKey ?? "")}</p>
+                <p className="font-semibold text-slate-950">模型：{activeModel?.id ?? "未选择"}</p>
+                <p className="mt-2 break-all font-mono text-xs text-slate-500">{activeModel ? `${activeModel.baseUrl}${activeModel.requestPath}` : "未选择"}</p>
+                <p className="mt-2 text-xs">API Key：{maskSecret(activeConfig?.apiKey ?? "")}</p>
               </div>
-              <Button variant="outline" className="w-full" onClick={() => navigate("/console")}>切换模型或 API Key</Button>
+              <Button variant="outline" className="w-full" onClick={() => navigate("/settings")}>配置 API</Button>
             </CardContent>
           </Card>
-          <Alert className="border-emerald-200 bg-emerald-50 text-emerald-950">
-            <AlertCircle className="h-4 w-4" /><AlertTitle>隐私边界</AlertTitle>
-            <AlertDescription className="text-emerald-800">工具调用由浏览器直连 SheepAI。</AlertDescription>
-          </Alert>
+          {!hasRunnableConfig && (
+            <Alert className="border-amber-200 bg-amber-50 text-amber-950">
+              <AlertCircle className="h-4 w-4" /><AlertTitle>需要 API 配置</AlertTitle>
+              <AlertDescription className="text-amber-800">填写 API 地址、API Key 和模型 ID 后即可运行工具。</AlertDescription>
+            </Alert>
+          )}
         </aside>
 
         <div className="grid gap-6 xl:grid-cols-2">
@@ -166,7 +168,7 @@ export function ToolPage() {
               <Textarea value={inputText} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setInputText(e.target.value)}
                 placeholder={tool.placeholder} className="min-h-[150px] resize-y bg-white leading-7" />
               <Button type="button" size="lg" onClick={handleRun}
-                disabled={isRunning || !selectedModel || !hasApiKey || (needsImage && !imageData)}
+                disabled={isRunning || !hasRunnableConfig || (needsImage && !imageData)}
                 className="h-12 w-full">
                 {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 {isRunning ? "正在调用..." : `运行${tool.shortName}工具`}
