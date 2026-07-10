@@ -8,6 +8,7 @@
     "dev:proxy": "node server/index.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:routing": "node --test scripts/generic-ai-client-routing.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

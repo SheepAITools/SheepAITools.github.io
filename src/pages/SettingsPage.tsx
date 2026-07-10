@@ -233,6 +233,7 @@ export function SettingsPage() {
                   <SelectContent>
                     <SelectItem value="openai-compatible">OpenAI 兼容</SelectItem>
                     <SelectItem value="anthropic-compatible">Anthropic Messages 兼容</SelectItem>
+                    <SelectItem value="gemini-compatible">Gemini generateContent</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -91,10 +91,12 @@ function inferModelProvider(_modelId: string, endpointTypes: string[]): ModelPro
 }
 
 function getBaseUrl(provider: ModelProvider): string {
+  if (provider === "gemini-compatible") return "https://generativelanguage.googleapis.com/v1beta"
   return provider === "anthropic-compatible" ? CLAUDE_BASE_URL : GPT_BASE_URL
 }
 
 function getRequestPath(provider: ModelProvider): string {
+  if (provider === "gemini-compatible") return ":generateContent"
   return provider === "anthropic-compatible" ? "/v1/messages" : "/chat/completions"
 }
 
@@ -164,7 +166,11 @@ interface BuildModelOptionsParams {
 
 function buildFallbackModel(modelId: string, params: BuildModelOptionsParams = {}): ModelDefinition {
   const provider = params.interfaceFormat ?? inferModelProvider(modelId, ["openai"])
-  const endpointTypes = provider === "anthropic-compatible" ? ["anthropic"] : ["openai"]
+  const endpointTypes = provider === "anthropic-compatible"
+    ? ["anthropic"]
+    : provider === "gemini-compatible"
+      ? ["gemini"]
+      : ["openai"]
   return {
     id: modelId,
     label: modelId,

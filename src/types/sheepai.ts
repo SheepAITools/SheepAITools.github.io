@@ -1,6 +1,6 @@
 // ============ Model types ============
 
-export type ModelProvider = "openai-compatible" | "anthropic-compatible"
+export type ModelProvider = "openai-compatible" | "anthropic-compatible" | "gemini-compatible"
 export type ApiInterfaceFormat = ModelProvider
 
 export type ModelFamily = "GPT" | "Claude" | "Qwen" | "DeepSeek" | "GLM" | "Gemini" | "Llama" | "Grok" | "Kimi" | "MiniMax" | "Other"
