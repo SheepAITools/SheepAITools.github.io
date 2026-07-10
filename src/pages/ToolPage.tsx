@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ModelSelector } from "@/components/models/ModelSelector"
 import { useApiConfig } from "@/components/config/useApiConfig"
 import { getToolById } from "@/data/toolDefinitions"
-import { runConfiguredTool } from "@/lib/genericAiClient"
+import { normalizeToolImageOutput, runConfiguredTool } from "@/lib/genericAiClient"
 import { maskSecret } from "@/lib/display"
 import { cn } from "@/lib/utils"
 import type { RunToolResponse } from "@/types/sheepai"
@@ -78,7 +78,7 @@ export function ToolPage() {
       })
       setOutputText(result.content)
       if (result.imageData) {
-        setOutputImage(result.imageData.startsWith("data:") ? result.imageData : `data:image/png;base64,${result.imageData}`)
+        setOutputImage(normalizeToolImageOutput(result.imageData) ?? null)
       }
       setEndpoint(result.endpoint)
     } catch (err: unknown) { setError(err instanceof Error ? err.message : "工具调用失败") }

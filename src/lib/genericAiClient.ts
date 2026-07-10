@@ -36,7 +36,7 @@ function extractImageData(body: unknown): string | undefined {
   return undefined
 }
 
-function normalizeImageData(value: string | undefined): string | undefined {
+export function normalizeToolImageOutput(value: string | undefined): string | undefined {
   if (!value) return undefined
   if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("data:")) return value
   return `data:image/png;base64,${value}`
@@ -66,6 +66,14 @@ export function resolveOpenAiToolEndpoint(model: ModelDefinition, tool: ToolDefi
   return buildEndpoint(model.baseUrl, model.requestPath)
 }
 
+export function buildOpenAiJsonHeaders(apiKey: string): Record<string, string> {
+  return {
+    Accept: "application/json",
+    Authorization: buildAuthorizationHeader(apiKey),
+    "Content-Type": "application/json",
+  }
+}
+
 function base64ToBlob(base64: string, mimeType: string): Blob {
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
@@ -89,6 +97,8 @@ export function buildOpenAiToolPayload(request: Pick<RunToolRequest, "model" | "
     return {
       model: request.model.id,
       prompt: request.tool.buildUserPrompt(request.inputText),
+      size: "1024x1536",
+      n: 1,
     }
   }
 
@@ -199,8 +209,9 @@ async function runOpenAiCompatibleTool(request: RunToolRequest): Promise<RunTool
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: buildAuthorizationHeader(request.apiKey),
-        ...(isFormDataPayload ? {} : { "Content-Type": "application/json" }),
+        ...(isFormDataPayload
+          ? { Accept: "application/json", Authorization: buildAuthorizationHeader(request.apiKey) }
+          : buildOpenAiJsonHeaders(request.apiKey)),
       },
       body: isFormDataPayload ? payload : JSON.stringify(payload),
       signal: timeoutSignal(request.timeoutSeconds),
@@ -213,7 +224,7 @@ async function runOpenAiCompatibleTool(request: RunToolRequest): Promise<RunTool
       content: isImageGenerationTool(request.tool) || isImageEditTool(request.tool)
         ? "图片已生成。"
         : extractOpenAiContent(body),
-      imageData: normalizeImageData(extractImageData(body)),
+      imageData: normalizeToolImageOutput(extractImageData(body)),
       endpoint,
       provider: request.model.provider,
     }

@@ -92,7 +92,31 @@ test("builds image generation payload with prompt instead of chat messages", () 
     {
       model: "gpt-image-1",
       prompt: "a cyber sheep",
+      size: "1024x1536",
+      n: 1,
     },
+  )
+})
+
+test("builds OpenAI JSON headers with accept", () => {
+  assert.deepEqual(
+    module.buildOpenAiJsonHeaders("sk-test"),
+    {
+      Accept: "application/json",
+      Authorization: "Bearer sk-test",
+      "Content-Type": "application/json",
+    },
+  )
+})
+
+test("normalizes image output without corrupting URLs", () => {
+  assert.equal(
+    module.normalizeToolImageOutput("https://cdn.example.test/image.png"),
+    "https://cdn.example.test/image.png",
+  )
+  assert.equal(
+    module.normalizeToolImageOutput("YmFzZTY0"),
+    "data:image/png;base64,YmFzZTY0",
   )
 })
 
