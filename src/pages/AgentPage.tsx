@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
-  AlertCircle, ArrowLeft, Bot, CheckCircle2, ImageIcon, Loader2,
+  AlertCircle, ArrowLeft, Bot, CheckCircle2, Download, ImageIcon, Loader2,
   Play, RotateCcw, Sparkles, XCircle,
 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -34,6 +34,7 @@ import {
   type AgentSessionStep,
 } from "@/lib/agentRunner"
 import { clearAgentSession, loadAgentSession, saveAgentSession } from "@/lib/agentSessionStore"
+import { downloadImage } from "@/lib/download"
 import { cn } from "@/lib/utils"
 
 function getStatusLabel(status: AgentSession["status"] | AgentSessionStep["status"]): string {
@@ -99,6 +100,26 @@ function TextResultCard({ step, index }: { step: AgentSessionStep; index: number
         </pre>
       </CardContent>
     </Card>
+  )
+}
+
+function AgentImageResultCard({ step, index }: { step: AgentSessionStep; index: number }) {
+  if (!step.outputImage) return null
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+      <img src={step.outputImage} alt={step.input} className="aspect-square w-full object-cover" />
+      <div className="flex items-center justify-between gap-2 border-t border-slate-200 bg-white p-2">
+        <p className="min-w-0 truncate text-xs text-slate-500">图片 {index + 1}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => downloadImage(step.outputImage ?? "", `agent-image-${index + 1}`)}
+        >
+          <Download className="h-4 w-4" /> 下载
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -382,11 +403,8 @@ export function AgentPage() {
                 <CardDescription>已成功生成的图片会集中展示在这里。</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {session.steps.filter((step) => step.outputImage).map((step) => (
-                  <a key={`${step.id}-image`} href={step.outputImage} target="_blank" rel="noreferrer"
-                    className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 transition hover:border-emerald-300">
-                    <img src={step.outputImage} alt={step.input} className="aspect-square w-full object-cover" />
-                  </a>
+                {session.steps.filter((step) => step.outputImage).map((step, index) => (
+                  <AgentImageResultCard key={`${step.id}-image`} step={step} index={index} />
                 ))}
               </CardContent>
             </Card>

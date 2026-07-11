@@ -15,6 +15,7 @@ import { getToolById } from "@/data/toolDefinitions"
 import { filterModelsForTool } from "@/data/models"
 import { normalizeToolImageOutput, resolveConfiguredToolEndpoint, runConfiguredTool } from "@/lib/genericAiClient"
 import { maskSecret } from "@/lib/display"
+import { downloadImage } from "@/lib/download"
 import { cn } from "@/lib/utils"
 import type { RunToolResponse } from "@/types/sheepai"
 
@@ -97,8 +98,7 @@ export function ToolPage() {
 
   function handleDownload() {
     if (!outputImage) return
-    const a = document.createElement("a"); a.href = outputImage
-    a.download = `${tool?.id ?? "output"}-${Date.now()}.png`; a.click()
+    downloadImage(outputImage, tool?.id ?? "output")
   }
 
   return (
