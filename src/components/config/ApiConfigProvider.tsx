@@ -87,18 +87,21 @@ export function ApiConfigProvider({ children }: { children: ReactNode }) {
     return buildModelOptions(activeConfig.modelIds, {
       apiBaseUrl: activeConfig.apiBaseUrl,
       interfaceFormat: activeConfig.interfaceFormat,
+      modelIdGroups: activeConfig.modelIdGroups,
     })
   }, [activeConfig])
 
   const activeModel = useMemo(() => {
     if (!activeConfig) return undefined
-    return availableModels.find((model) => model.id === activeConfig.selectedModelId) ?? availableModels[0]
+    return availableModels.find((model) => model.id === activeConfig.selectedModelId) ??
+      availableModels.find((model) => model.capabilities?.includes("text")) ??
+      availableModels[0]
   }, [activeConfig, availableModels])
 
   const hasRunnableConfig = Boolean(
     activeConfig?.apiBaseUrl.trim() &&
     activeConfig?.apiKey.trim() &&
-    activeModel,
+    availableModels.length > 0,
   )
 
   const upsertConfig = useCallback((draft: ApiConfigDraft, existingId?: string) => {

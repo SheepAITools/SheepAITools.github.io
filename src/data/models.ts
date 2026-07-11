@@ -1,5 +1,5 @@
 import { CLAUDE_BASE_URL, GPT_BASE_URL } from "@/lib/sheepaiConfig"
-import type { ApiInterfaceFormat, ModelDefinition, ModelFamily, ModelProvider, ProviderGroup } from "@/types/sheepai"
+import type { ApiInterfaceFormat, ModelCapability, ModelDefinition, ModelFamily, ModelIdGroups, ModelProvider, ProviderGroup } from "@/types/sheepai"
 
 // ============ Latest recommended models (July 2026) ============
 
@@ -162,6 +162,12 @@ export function buildModelFromRaw(raw: {
 interface BuildModelOptionsParams {
   apiBaseUrl?: string
   interfaceFormat?: ApiInterfaceFormat
+  modelIdGroups?: ModelIdGroups
+}
+
+function getCapabilitiesForModel(modelId: string, groups?: ModelIdGroups): ModelCapability[] {
+  if (!groups) return []
+  return (Object.keys(groups) as ModelCapability[]).filter((capability) => groups[capability].includes(modelId))
 }
 
 function buildFallbackModel(modelId: string, params: BuildModelOptionsParams = {}): ModelDefinition {
@@ -185,6 +191,7 @@ function buildFallbackModel(modelId: string, params: BuildModelOptionsParams = {
     modelType: "文本",
     tags: ["对话"],
     endpointTypes,
+    capabilities: getCapabilitiesForModel(modelId, params.modelIdGroups),
   }
 }
 
@@ -247,6 +254,20 @@ export function groupModelsByProvider(models: ModelDefinition[]): ProviderGroup[
 
 export function filterModelsForTool(models: ModelDefinition[], toolModelFilter?: string): ModelDefinition[] {
   if (!toolModelFilter) return models.filter((m) => m.enabled)
+  const hasCapabilityGroups = models.some((m) => (m.capabilities?.length ?? 0) > 0)
+  if (hasCapabilityGroups) {
+    const capabilityByFilter: Record<string, ModelCapability> = {
+      text: "text",
+      "image-gen": "imageGeneration",
+      "image-edit": "imageEdit",
+      "image-vision": "vision",
+      tts: "tts",
+      stt: "stt",
+    }
+    const capability = capabilityByFilter[toolModelFilter]
+    if (capability) return models.filter((m) => m.enabled && m.capabilities?.includes(capability))
+  }
+
   if (models.every((m) => m.ownedBy === "custom")) return models.filter((m) => m.enabled)
 
   return models.filter((m) => {

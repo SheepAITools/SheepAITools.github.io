@@ -1,7 +1,7 @@
 import { TOOL_DEFINITIONS, getToolById } from "@/data/toolDefinitions"
 import { filterModelsForTool } from "@/data/models"
 import { normalizeToolImageOutput, runConfiguredTool } from "@/lib/genericAiClient"
-import type { ApiConfiguration, ModelDefinition, ToolDefinition } from "@/types/sheepai"
+import type { ApiConfiguration, ModelCapability, ModelDefinition, ModelIdGroups, ToolDefinition } from "@/types/sheepai"
 
 export type AgentStepStatus = "pending" | "running" | "completed" | "failed" | "interrupted"
 export type AgentSessionStatus = "idle" | "planning" | "running" | "completed" | "failed" | "interrupted"
@@ -141,6 +141,9 @@ export function getAgentCallableTools(): ToolDefinition[] {
 }
 
 export function getAgentTextModels(models: ModelDefinition[]): ModelDefinition[] {
+  const explicitTextModels = models.filter((model) => model.enabled && model.capabilities?.includes("text"))
+  if (explicitTextModels.length > 0) return explicitTextModels
+
   return models.filter((model) => {
     if (!model.enabled) return false
     if (model.ownedBy === "custom") return !looksLikeImageModel(model.id) && !/tts|speech|audio|voice/i.test(model.id)
@@ -268,7 +271,33 @@ function looksLikeImageModel(modelId: string): boolean {
   return /(^|[-_])(image|dall|flux|wan|sdxl|midjourney|mj)([-_]|$)|qwen-image|gpt-image/i.test(modelId)
 }
 
-export function selectAgentModelForTool(availableModels: ModelDefinition[], tool: Pick<ToolDefinition, "id" | "modelFilter">, fallbackTextModel: ModelDefinition): ModelDefinition | undefined {
+function getCapabilityForTool(tool: Pick<ToolDefinition, "modelFilter">): ModelCapability | undefined {
+  switch (tool.modelFilter) {
+    case "text": return "text"
+    case "image-gen": return "imageGeneration"
+    case "image-edit": return "imageEdit"
+    case "image-vision": return "vision"
+    case "tts": return "tts"
+    case "stt": return "stt"
+    default: return undefined
+  }
+}
+
+export function selectAgentModelForTool(availableModels: ModelDefinition[], tool: Pick<ToolDefinition, "id" | "modelFilter">, fallbackTextModel: ModelDefinition, groups?: ModelIdGroups): ModelDefinition | undefined {
+  const capability = getCapabilityForTool(tool)
+  const groupedModelIds = capability ? groups?.[capability] ?? [] : []
+  if (groupedModelIds.length > 0) {
+    const groupedModel = groupedModelIds
+      .map((modelId) => availableModels.find((model) => model.id === modelId && model.enabled))
+      .find((model): model is ModelDefinition => Boolean(model))
+    if (groupedModel) return groupedModel
+  }
+
+  if (capability) {
+    const taggedModel = availableModels.find((model) => model.enabled && model.capabilities?.includes(capability))
+    if (taggedModel) return taggedModel
+  }
+
   const compatibleModels = filterModelsForTool(availableModels, tool.modelFilter)
   if (tool.modelFilter === "text") {
     return compatibleModels.find((model) => model.id === fallbackTextModel.id) ?? compatibleModels[0] ?? fallbackTextModel
@@ -332,7 +361,7 @@ export async function executeAgentSession(session: AgentSession, context: AgentR
       continue
     }
 
-    const model = selectAgentModelForTool(context.availableModels, tool, context.textModel)
+    const model = selectAgentModelForTool(context.availableModels, tool, context.textModel, context.config.modelIdGroups)
     if (!model) {
       step.status = "failed"
       step.error = "当前配置缺少该工具可用的模型。"

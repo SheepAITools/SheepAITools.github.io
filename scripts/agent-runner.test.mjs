@@ -134,4 +134,39 @@ test("excludes image-looking custom models from agent text models", () => {
   assert.deepEqual(module.getAgentTextModels(models).map((model) => model.id), ["gpt-4o-mini"])
 })
 
+test("selects models from explicit capability groups before name heuristics", () => {
+  const textModel = {
+    id: "gpt-5.4",
+    enabled: true,
+    ownedBy: "custom",
+    modelType: "文本",
+    tags: ["对话"],
+    endpointTypes: ["openai"],
+  }
+  const imageModel = {
+    id: "paint-pro",
+    enabled: true,
+    ownedBy: "custom",
+    modelType: "文本",
+    tags: ["对话"],
+    endpointTypes: ["openai"],
+  }
+
+  const selected = module.selectAgentModelForTool(
+    [textModel, imageModel],
+    { id: "image-generate", modelFilter: "image-gen" },
+    textModel,
+    {
+      text: ["gpt-5.4"],
+      vision: ["gpt-5.4"],
+      imageGeneration: ["paint-pro"],
+      imageEdit: ["paint-pro"],
+      tts: [],
+      stt: [],
+    },
+  )
+
+  assert.equal(selected.id, "paint-pro")
+})
+
 await writeFile(join(outdir, "agent-runner-last-run.txt"), new Date().toISOString())

@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useApiConfig } from "@/components/config/useApiConfig"
 import { createEmptyConfigDraft, draftFromConfig, type ApiConfigDraft } from "@/lib/configStore"
 import { cn } from "@/lib/utils"
-import type { ApiConfiguration, ApiInterfaceFormat } from "@/types/sheepai"
+import type { ApiConfiguration, ApiInterfaceFormat, ModelCapability, ModelIdGroups } from "@/types/sheepai"
 import { toast } from "sonner"
 
 const SHEEPAI_HOME = "https://www.sheepai.top"
@@ -34,13 +34,86 @@ const GUIDE_STEPS = [
   { title: "填写配置", body: "回到这里填写 API 地址、API Key 和模型 ID。" },
 ]
 
-function modelTextFromDraft(draft: ApiConfigDraft): string {
-  return draft.modelIds.join("\n")
-}
-
 function parseModelText(value: string): string[] {
   return [...new Set(value.split(/[\n,，]/).map((item) => item.trim()).filter(Boolean))]
 }
+
+function modelGroupTextFromDraft(draft: ApiConfigDraft): Record<ModelCapability, string> {
+  return {
+    text: draft.modelIdGroups.text.join("\n"),
+    vision: draft.modelIdGroups.vision.join("\n"),
+    imageGeneration: draft.modelIdGroups.imageGeneration.join("\n"),
+    imageEdit: draft.modelIdGroups.imageEdit.join("\n"),
+    tts: draft.modelIdGroups.tts.join("\n"),
+    stt: draft.modelIdGroups.stt.join("\n"),
+  }
+}
+
+function parseModelGroups(value: Record<ModelCapability, string>): ModelIdGroups {
+  return {
+    text: parseModelText(value.text),
+    vision: parseModelText(value.vision),
+    imageGeneration: parseModelText(value.imageGeneration),
+    imageEdit: parseModelText(value.imageEdit),
+    tts: parseModelText(value.tts),
+    stt: parseModelText(value.stt),
+  }
+}
+
+function flattenGroups(groups: ModelIdGroups): string[] {
+  return [...new Set([
+    ...groups.text,
+    ...groups.vision,
+    ...groups.imageGeneration,
+    ...groups.imageEdit,
+    ...groups.tts,
+    ...groups.stt,
+  ])]
+}
+
+const MODEL_GROUP_FIELDS: Array<{
+  capability: ModelCapability
+  label: string
+  description: string
+  placeholder: string
+}> = [
+  {
+    capability: "text",
+    label: "文本 / 智能体模型",
+    description: "用于文本工具、智能体聊天和规划。",
+    placeholder: "gpt-5.4",
+  },
+  {
+    capability: "vision",
+    label: "视觉理解模型",
+    description: "用于上传图片后进行识图和分析。",
+    placeholder: "gpt-5.4",
+  },
+  {
+    capability: "imageGeneration",
+    label: "图片生成模型",
+    description: "用于文生图。",
+    placeholder: "gpt-image-2",
+  },
+  {
+    capability: "imageEdit",
+    label: "图片编辑模型",
+    description: "用于 P 图、修图和图片编辑。",
+    placeholder: "gpt-image-2",
+  },
+  {
+    capability: "tts",
+    label: "文字转语音模型",
+    description: "用于语音合成。",
+    placeholder: "tts-1",
+  },
+  {
+    capability: "stt",
+    label: "语音转文字模型",
+    description: "用于音频转写。",
+    placeholder: "whisper-1",
+  },
+]
 
 export function SettingsPage() {
   const navigate = useNavigate()
@@ -57,7 +130,7 @@ export function SettingsPage() {
   const initialDraft = activeConfig ? draftFromConfig(activeConfig) : createEmptyConfigDraft()
   const [editingId, setEditingId] = useState(activeConfig?.id ?? "")
   const [draft, setDraft] = useState<ApiConfigDraft>(() => initialDraft)
-  const [modelText, setModelText] = useState(() => modelTextFromDraft(initialDraft))
+  const [modelGroupText, setModelGroupText] = useState(() => modelGroupTextFromDraft(initialDraft))
 
   const editingConfig = useMemo<ApiConfiguration | undefined>(() => {
     return state.configs.find((config) => config.id === editingId)
@@ -72,7 +145,7 @@ export function SettingsPage() {
     setEditingId(config.id)
     const nextDraft = draftFromConfig(config)
     setDraft(nextDraft)
-    setModelText(modelTextFromDraft(nextDraft))
+    setModelGroupText(modelGroupTextFromDraft(nextDraft))
     selectConfig(config.id)
     clearTest()
   }
@@ -81,14 +154,16 @@ export function SettingsPage() {
     const nextDraft = createEmptyConfigDraft()
     setEditingId("")
     setDraft(nextDraft)
-    setModelText(modelTextFromDraft(nextDraft))
+    setModelGroupText(modelGroupTextFromDraft(nextDraft))
     clearTest()
   }
 
   function buildDraftForSave(): ApiConfigDraft {
-    const modelIds = parseModelText(modelText)
+    const modelIdGroups = parseModelGroups(modelGroupText)
+    const modelIds = flattenGroups(modelIdGroups)
     return {
       ...draft,
+      modelIdGroups,
       modelIds,
       selectedModelId: modelIds.includes(draft.selectedModelId) ? draft.selectedModelId : modelIds[0] ?? "",
     }
@@ -104,7 +179,7 @@ export function SettingsPage() {
     const saved = upsertConfig(nextDraft, editingId || undefined)
     setEditingId(saved.id)
     setDraft(draftFromConfig(saved))
-    setModelText(modelTextFromDraft(draftFromConfig(saved)))
+    setModelGroupText(modelGroupTextFromDraft(draftFromConfig(saved)))
     selectConfig(saved.id)
     toast.success("配置已保存")
     return saved
@@ -123,7 +198,9 @@ export function SettingsPage() {
     startNewConfig()
   }
 
-  const selectedModelId = draft.selectedModelId || parseModelText(modelText)[0] || ""
+  const currentGroups = parseModelGroups(modelGroupText)
+  const allModelIds = flattenGroups(currentGroups)
+  const selectedModelId = draft.selectedModelId || allModelIds[0] || ""
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6 xl:grid-cols-[280px_1fr]">
@@ -278,20 +355,34 @@ export function SettingsPage() {
               </div>
             </div>
 
+            <div className="space-y-3">
+              <div>
+                <Label>模型 ID</Label>
+                <p className="mt-1 text-xs leading-5 text-slate-400">每行一个模型 ID；同一个模型可以填写到多个类别。</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                {MODEL_GROUP_FIELDS.map((field) => (
+                  <div key={field.capability} className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <Label htmlFor={`models-${field.capability}`}>{field.label}</Label>
+                    <p className="text-xs leading-5 text-slate-400">{field.description}</p>
+                    <Textarea
+                      id={`models-${field.capability}`}
+                      value={modelGroupText[field.capability]}
+                      onChange={(event) => {
+                        clearTest()
+                        setModelGroupText((current) => ({ ...current, [field.capability]: event.target.value }))
+                      }}
+                      placeholder={field.placeholder}
+                      className="min-h-24 bg-white font-mono text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-[1fr_240px]">
-              <div className="space-y-2">
-                <Label htmlFor="models">模型 ID</Label>
-                <Textarea
-                  id="models"
-                  data-testid="models-textarea"
-                  value={modelText}
-                  onChange={(event) => {
-                    clearTest()
-                    setModelText(event.target.value)
-                  }}
-                  placeholder="每行一个模型 ID，例如：&#10;gpt-4o-mini&#10;gpt-4o"
-                  className="min-h-32 bg-white font-mono text-sm"
-                />
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">
+                已填写 <span className="font-semibold text-slate-950">{allModelIds.length}</span> 个模型。
               </div>
               <div className="space-y-2">
                 <Label htmlFor="default-model">默认模型</Label>
@@ -300,7 +391,7 @@ export function SettingsPage() {
                     <SelectValue placeholder="选择模型" />
                   </SelectTrigger>
                   <SelectContent>
-                    {parseModelText(modelText).map((modelId) => (
+                    {allModelIds.map((modelId) => (
                       <SelectItem key={modelId} value={modelId}>{modelId}</SelectItem>
                     ))}
                   </SelectContent>

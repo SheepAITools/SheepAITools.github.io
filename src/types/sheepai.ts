@@ -4,6 +4,9 @@ export type ModelProvider = "openai-compatible" | "anthropic-compatible" | "gemi
 export type ApiInterfaceFormat = ModelProvider
 
 export type ModelFamily = "GPT" | "Claude" | "Qwen" | "DeepSeek" | "GLM" | "Gemini" | "Llama" | "Grok" | "Kimi" | "MiniMax" | "Other"
+export type ModelCapability = "text" | "vision" | "imageGeneration" | "imageEdit" | "tts" | "stt"
+
+export type ModelIdGroups = Record<ModelCapability, string[]>
 
 /** API 原始返回的模型数据 */
 export interface RawModelInfo {
@@ -36,6 +39,8 @@ export interface ModelDefinition {
   tags: string[]
   /** API 端点类型 */
   endpointTypes: string[]
+  /** 用户配置中标记的能力 */
+  capabilities?: ModelCapability[]
 }
 
 export interface ApiConfiguration {
@@ -45,6 +50,7 @@ export interface ApiConfiguration {
   apiKey: string
   interfaceFormat: ApiInterfaceFormat
   modelIds: string[]
+  modelIdGroups: ModelIdGroups
   timeoutSeconds: number
   selectedModelId: string
   createdAt: number

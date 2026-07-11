@@ -105,12 +105,13 @@ export function ModelSelector({ toolModelFilter, className }: ModelSelectorProps
   }
 
   const totalAvailable = availableModels.length
+  const selectedModel = filtered.find((model) => model.id === activeModel?.id) ?? filtered[0] ?? activeModel
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className={cn("gap-1 max-w-[220px]", className)}>
-          <span className="truncate text-xs">{activeModel?.id ?? "选择模型"}</span>
+          <span className="truncate text-xs">{selectedModel?.id ?? "选择模型"}</span>
           <ChevronDown className="h-3 w-3 shrink-0 ml-auto" />
         </Button>
       </DropdownMenuTrigger>
@@ -145,7 +146,7 @@ export function ModelSelector({ toolModelFilter, className }: ModelSelectorProps
               <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">
                 推荐模型 · {recommended.length}
               </div>
-              {recommended.map((model: ModelDefinition) => renderModelRow(model, activeModel, selectModel, () => setOpen(false)))}
+              {recommended.map((model: ModelDefinition) => renderModelRow(model, selectedModel, selectModel, () => setOpen(false)))}
             </div>
           )}
 
@@ -167,7 +168,7 @@ export function ModelSelector({ toolModelFilter, className }: ModelSelectorProps
                   <span className="font-normal text-slate-300 ml-1">({group.models.length})</span>
                 </button>
                 {!group.collapsed && group.models.map((model: ModelDefinition) =>
-                  renderModelRow(model, activeModel, selectModel, () => setOpen(false))
+                  renderModelRow(model, selectedModel, selectModel, () => setOpen(false))
                 )}
               </div>
             ))

@@ -10,6 +10,8 @@
     "lint": "eslint .",
     "test:routing": "node --test scripts/generic-ai-client-routing.test.mjs",
     "test:agent": "node --test scripts/agent-runner.test.mjs",
+    "test:config": "node --test scripts/config-store.test.mjs",
+    "test:models": "node --test scripts/model-filtering.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
