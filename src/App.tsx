@@ -4,6 +4,7 @@ import { AppLayout } from "@/components/layout/AppLayout"
 import { ConsolePage } from "@/pages/ConsolePage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { ToolPage } from "@/pages/ToolPage"
+import { AgentPage } from "@/pages/AgentPage"
 import { Toaster } from "@/components/ui/sonner"
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
             <Route path="/" element={<Navigate to="/console" replace />} />
             <Route path="/console" element={<ConsolePage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/agent" element={<AgentPage />} />
             <Route path="/tools/:toolId" element={<ToolPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/console" replace />} />

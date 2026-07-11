@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom"
-import { AlertCircle, ArrowRight, KeyRound, Sparkles, type LucideIcon } from "lucide-react"
+import { AlertCircle, ArrowRight, Bot, KeyRound, Sparkles, type LucideIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -56,6 +56,26 @@ export function ConsolePage() {
           <span className="truncate font-mono text-xs text-slate-500">{activeConfig.apiBaseUrl}</span>
         </div>
       )}
+
+      <button type="button" onClick={() => navigate("/agent")}
+        disabled={!hasRunnableConfig}
+        className="group w-full rounded-3xl border border-white/75 bg-white/90 p-5 text-left shadow-lg shadow-slate-200/60 transition hover:-translate-y-1 hover:border-emerald-200 hover:shadow-2xl hover:shadow-emerald-100/70 disabled:cursor-not-allowed disabled:opacity-60">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white transition group-hover:bg-emerald-500">
+              <Bot className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-bold text-slate-950">工具智能体</h3>
+                <Badge variant="secondary">多工具</Badge>
+              </div>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">描述需求后自动选择并调用站内工具，适合批量生成和组合任务。</p>
+            </div>
+          </div>
+          <ArrowRight className="mt-3 h-5 w-5 text-slate-300 transition group-hover:translate-x-1 group-hover:text-emerald-500" />
+        </div>
+      </button>
 
       {/* Tool categories */}
       {(["text", "image", "audio"] as const).map((cat) => {

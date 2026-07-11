@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:routing": "node --test scripts/generic-ai-client-routing.test.mjs",
+    "test:agent": "node --test scripts/agent-runner.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
