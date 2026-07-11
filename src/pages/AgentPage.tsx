@@ -5,6 +5,17 @@ import {
   Play, RotateCcw, Sparkles, XCircle,
 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,6 +27,7 @@ import {
   executeAgentSession,
   getAgentTextModels,
   planAgentSession,
+  prepareSessionForFollowUp,
   prepareFailedStepsForRetry,
   runAgentSession,
   type AgentSession,
@@ -51,9 +63,9 @@ function StepStatusRow({ step, index }: { step: AgentSessionStep; index: number 
       <div className="flex items-start gap-3">
         <div className={cn(
           "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-          step.status === "completed" ? "bg-emerald-50 text-emerald-700" :
-            step.status === "failed" ? "bg-red-50 text-red-700" :
-              step.status === "running" ? "bg-sky-50 text-sky-700" : "border border-slate-300 bg-white text-slate-700",
+          step.status === "completed" ? "border border-emerald-200 bg-white text-emerald-700" :
+            step.status === "failed" ? "border border-red-200 bg-white text-red-700" :
+              step.status === "running" ? "border border-sky-200 bg-white text-sky-700" : "border border-slate-300 bg-white text-slate-700",
         )}>
           {index + 1}
         </div>
@@ -161,9 +173,13 @@ export function AgentPage() {
       return
     }
 
-    const nextSession = createAgentSession(trimmed)
+    const nextSession = session ? prepareSessionForFollowUp(session, trimmed) : createAgentSession(trimmed)
     updateSession(nextSession)
     await runWithSession(nextSession, "full")
+  }
+
+  function handleNewSessionConfirmed() {
+    resetSession()
   }
 
   async function handleRetryFailed() {
@@ -247,15 +263,31 @@ export function AgentPage() {
               />
               <Button className="h-12 w-full" size="lg" onClick={handleRun} disabled={!canRun}>
                 {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                {isRunning ? "运行中..." : "运行智能体"}
+                {isRunning ? "运行中..." : session ? "发送到当前会话" : "运行智能体"}
               </Button>
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={handleRetryFailed} disabled={!canRetryFailed}>
                   <RotateCcw className="h-4 w-4" /> 重试失败
                 </Button>
-                <Button variant="outline" onClick={resetSession} disabled={isRunning || (!session && !inputText)}>
-                  清空
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" disabled={isRunning || !session}>
+                      新会话
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>开始新的会话？</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        开启新会话会清空当前会话信息和已保存的结果。
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>取消</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleNewSessionConfirmed}>确定</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </CardContent>
           </Card>

@@ -10,6 +10,7 @@ export interface AgentPlanStep {
   toolId: string
   input: string
   dependsOn?: string[]
+  sourceResultIndex?: number
 }
 
 export interface AgentPlan {
@@ -62,6 +63,7 @@ const AGENT_ALLOWED_TOOL_IDS = new Set([
   "text-correct",
   "format-convert",
   "image-generate",
+  "image-edit",
 ])
 
 const MAX_AGENT_STEPS = 6
@@ -78,10 +80,10 @@ const AGENT_PLANNER_TOOL: ToolDefinition = {
   systemPrompt: [
     "你是一个站内工具调度智能体，只能选择给定工具完成用户需求。",
     "你必须只输出 JSON，不要输出 Markdown、解释或额外文本。",
-    "JSON 格式：{\"summary\":\"一句话说明计划\",\"steps\":[{\"toolId\":\"工具 ID\",\"input\":\"传给该工具的完整输入\",\"dependsOn\":[\"前置步骤序号\"]}]}。",
+    "JSON 格式：{\"summary\":\"一句话说明计划\",\"steps\":[{\"toolId\":\"工具 ID\",\"input\":\"传给该工具的完整输入\",\"dependsOn\":[\"前置步骤序号\"],\"sourceResultIndex\":已有图片序号}]}。",
     "最多输出 6 个步骤。需要多张图片时，为每张图片创建一个 image-generate 步骤。",
     "如果步骤之间相互独立，不要填写 dependsOn。只有后一步必须使用前一步结果时，才填写前置步骤序号，例如 [\"1\"]。",
-    "不要选择需要上传文件或图片输入的工具。",
+    "如果用户要求修改已有图片，可以选择 image-edit，并用 sourceResultIndex 指向要修改的图片序号；不要把图片内容写进 input。",
   ].join("\n"),
   buildUserPrompt: (inputText: string): string => inputText,
   defaultInput: "",
@@ -126,9 +128,12 @@ export function sanitizeAgentPlan(value: unknown): AgentPlan {
       const dependsOn = Array.isArray(step.dependsOn)
         ? step.dependsOn.map((id) => asString(id)).filter(Boolean)
         : undefined
+      const sourceResultIndex = typeof step.sourceResultIndex === "number" && Number.isFinite(step.sourceResultIndex)
+        ? Math.max(1, Math.round(step.sourceResultIndex))
+        : undefined
       if (!AGENT_ALLOWED_TOOL_IDS.has(toolId)) return null
       if (!input) return null
-      return { toolId, input, dependsOn }
+      return { toolId, input, dependsOn, sourceResultIndex }
     })
     .filter((step): step is AgentPlanStep => step !== null)
     .slice(0, MAX_AGENT_STEPS)
@@ -184,6 +189,9 @@ function normalizeStep(value: unknown, index: number): AgentSessionStep | null {
     toolId,
     input,
     dependsOn: Array.isArray(value.dependsOn) ? value.dependsOn.map((id) => asString(id)).filter(Boolean) : undefined,
+    sourceResultIndex: typeof value.sourceResultIndex === "number" && Number.isFinite(value.sourceResultIndex)
+      ? Math.max(1, Math.round(value.sourceResultIndex))
+      : undefined,
     status,
     toolName: asString(value.toolName) || tool?.name,
     outputText: asString(value.outputText),
@@ -281,6 +289,19 @@ export function prepareFailedStepsForRetry(session: AgentSession): AgentSession 
   }
 }
 
+export function prepareSessionForFollowUp(session: AgentSession, userRequest: string): AgentSession {
+  const now = Date.now()
+  const trimmedRequest = userRequest.trim()
+  return {
+    ...session,
+    userRequest: trimmedRequest,
+    status: "planning",
+    error: "",
+    messages: [...session.messages, { role: "user", content: trimmedRequest, createdAt: now }],
+    updatedAt: now,
+  }
+}
+
 export function markBlockedDependentSteps(session: AgentSession): AgentSession {
   const failedStepIds = new Set(session.steps.filter((step) => step.status === "failed" || step.status === "skipped").map((step) => step.id))
   if (failedStepIds.size === 0) return session
@@ -300,18 +321,43 @@ export function markBlockedDependentSteps(session: AgentSession): AgentSession {
   }
 }
 
-function buildPlannerPrompt(userRequest: string): string {
+function listPriorImageResults(session: AgentSession | undefined): string {
+  if (!session) return ""
+  const imageResults = session.steps
+    .map((step, index) => ({ step, index: index + 1 }))
+    .filter(({ step }) => Boolean(step.outputImage))
+    .map(({ step, index }) => `图片 ${index}: ${step.toolName ?? step.toolId}，原始需求：${step.input.slice(0, 180)}`)
+
+  if (imageResults.length === 0) return ""
+  return ["已有图片结果（只使用序号引用，不要复制图片数据）：", ...imageResults].join("\n")
+}
+
+export function buildAgentPlannerPrompt(session: AgentSession | undefined, userRequest: string): string {
   const toolList = getAgentCallableTools()
     .map((tool) => `- ${tool.id}: ${tool.name}，${tool.description}`)
     .join("\n")
+  const priorImages = listPriorImageResults(session)
 
   return [
     "可调用工具：",
     toolList,
+    priorImages ? "" : undefined,
+    priorImages || undefined,
+    priorImages ? "如需修改已有图片，请选择 image-edit，并设置 sourceResultIndex 为图片序号；input 只写修改要求。" : undefined,
     "",
     "用户需求：",
     userRequest,
-  ].join("\n")
+  ].filter((part): part is string => typeof part === "string").join("\n")
+}
+
+export function resolveImageInputForStep(session: AgentSession, step: Pick<AgentSessionStep, "sourceResultIndex">): { base64: string; mimeType: string } | undefined {
+  if (!step.sourceResultIndex) return undefined
+  const sourceStep = session.steps[step.sourceResultIndex - 1]
+  const outputImage = sourceStep?.outputImage
+  if (!outputImage) return undefined
+  const dataUrlMatch = outputImage.match(/^data:([^;]+);base64,(.+)$/)
+  if (dataUrlMatch) return { mimeType: dataUrlMatch[1] || "image/png", base64: dataUrlMatch[2] || "" }
+  return undefined
 }
 
 function looksLikeImageModel(modelId: string): boolean {
@@ -373,12 +419,12 @@ export async function planAgentSession(session: AgentSession, context: AgentRunC
     apiKey: context.config.apiKey,
     model: context.textModel,
     tool: AGENT_PLANNER_TOOL,
-    inputText: buildPlannerPrompt(nextSession.userRequest),
+    inputText: buildAgentPlannerPrompt(session.steps.length > 0 || session.messages.length > 1 ? session : undefined, nextSession.userRequest),
     timeoutSeconds: context.config.timeoutSeconds,
   })
   const plan = parseAgentPlan(response.content)
   nextSession.summary = plan.summary
-  nextSession.steps = createStepsFromPlan(plan)
+  nextSession.steps = [...nextSession.steps, ...createStepsFromPlan(plan)]
   nextSession.messages = [
     ...nextSession.messages,
     { role: "assistant", content: plan.summary, createdAt: Date.now() },
@@ -427,11 +473,14 @@ export async function executeAgentSession(session: AgentSession, context: AgentR
     emitSession(nextSession, context.onSessionChange)
 
     try {
+      const imageInput = resolveImageInputForStep(nextSession, step)
       const response = await runConfiguredTool({
         apiKey: context.config.apiKey,
         model,
         tool,
         inputText: step.input,
+        imageBase64: imageInput?.base64,
+        imageMimeType: imageInput?.mimeType,
         timeoutSeconds: context.config.timeoutSeconds,
       })
       step.status = "completed"
@@ -464,7 +513,13 @@ export async function executeAgentSession(session: AgentSession, context: AgentR
   return nextSession
 }
 
+export function shouldPlanAgentSession(session: AgentSession): boolean {
+  return session.status === "planning" || session.steps.length === 0
+}
+
 export async function runAgentSession(session: AgentSession, context: AgentRunContext): Promise<AgentSession> {
-  const plannedSession = session.steps.length > 0 ? session : await planAgentSession(session, context)
+  const plannedSession = shouldPlanAgentSession(session)
+    ? await planAgentSession(session, context)
+    : session
   return executeAgentSession(plannedSession, context)
 }

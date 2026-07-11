@@ -46,6 +46,18 @@ test("parses agent plans from fenced JSON", () => {
   assert.equal(plan.steps[0].toolId, "image-generate")
 })
 
+test("parses image edit source result references", () => {
+  const plan = module.parseAgentPlan(JSON.stringify({
+    summary: "修改第二张图",
+    steps: [
+      { toolId: "image-edit", input: "把背景改成粉色", sourceResultIndex: 2 },
+    ],
+  }))
+
+  assert.equal(plan.steps[0].toolId, "image-edit")
+  assert.equal(plan.steps[0].sourceResultIndex, 2)
+})
+
 test("sanitizes plans to known agent tools and caps step count", () => {
   const plan = module.sanitizeAgentPlan({
     summary: "mixed",
@@ -63,7 +75,7 @@ test("sanitizes plans to known agent tools and caps step count", () => {
 
   assert.deepEqual(
     plan.steps.map((step) => step.toolId),
-    ["image-generate", "translation", "summary", "code-explain", "polishing", "prompt-optimizer"],
+    ["image-generate", "translation", "image-edit", "summary", "code-explain", "polishing"],
   )
 })
 
@@ -208,6 +220,79 @@ test("marks dependent pending steps as skipped when prerequisites fail", () => {
 
   assert.equal(session.steps[1].status, "skipped")
   assert.equal(session.steps[1].error, "前置步骤失败，已跳过。")
+})
+
+test("builds follow-up planner prompt with image references but without image data", () => {
+  const prompt = module.buildAgentPlannerPrompt({
+    id: "session-1",
+    userRequest: "make images",
+    status: "completed",
+    summary: "生成四张图",
+    messages: [],
+    steps: [
+      { id: "one", toolId: "image-generate", input: "red cover", status: "completed", outputImage: "data:image/png;base64,AAA" },
+      { id: "two", toolId: "image-generate", input: "blue cover", status: "completed", outputImage: "data:image/png;base64,BBB" },
+    ],
+    createdAt: 1,
+    updatedAt: 1,
+  }, "把第二张背景改成粉色")
+
+  assert.equal(prompt.includes("data:image"), false)
+  assert.equal(prompt.includes("图片 2"), true)
+  assert.equal(prompt.includes("blue cover"), true)
+  assert.equal(prompt.includes("sourceResultIndex"), true)
+})
+
+test("resolves image input from a referenced prior result", () => {
+  const imageInput = module.resolveImageInputForStep({
+    id: "session-1",
+    userRequest: "make images",
+    status: "completed",
+    messages: [],
+    steps: [
+      { id: "one", toolId: "image-generate", input: "red cover", status: "completed", outputImage: "data:image/png;base64,AAA" },
+      { id: "two", toolId: "image-generate", input: "blue cover", status: "completed", outputImage: "data:image/jpeg;base64,BBB" },
+    ],
+    createdAt: 1,
+    updatedAt: 1,
+  }, { id: "edit", toolId: "image-edit", input: "change", status: "pending", sourceResultIndex: 2 })
+
+  assert.deepEqual(imageInput, { base64: "BBB", mimeType: "image/jpeg" })
+})
+
+test("prepares follow-up sessions without dropping prior results", () => {
+  const session = module.prepareSessionForFollowUp({
+    id: "session-1",
+    userRequest: "make images",
+    status: "completed",
+    messages: [{ role: "user", content: "make images", createdAt: 1 }],
+    steps: [
+      { id: "one", toolId: "image-generate", input: "red cover", status: "completed", outputImage: "data:image/png;base64,AAA" },
+    ],
+    createdAt: 1,
+    updatedAt: 1,
+  }, "修改第一张")
+
+  assert.equal(session.steps.length, 1)
+  assert.equal(session.steps[0].outputImage, "data:image/png;base64,AAA")
+  assert.equal(session.messages.at(-1).content, "修改第一张")
+  assert.equal(session.status, "planning")
+})
+
+test("identifies follow-up sessions as needing a new plan", () => {
+  const session = module.prepareSessionForFollowUp({
+    id: "session-1",
+    userRequest: "make images",
+    status: "completed",
+    messages: [],
+    steps: [
+      { id: "one", toolId: "image-generate", input: "red cover", status: "completed", outputImage: "data:image/png;base64,AAA" },
+    ],
+    createdAt: 1,
+    updatedAt: 1,
+  }, "修改第一张")
+
+  assert.equal(module.shouldPlanAgentSession(session), true)
 })
 
 await writeFile(join(outdir, "agent-runner-last-run.txt"), new Date().toISOString())
