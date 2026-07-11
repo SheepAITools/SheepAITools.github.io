@@ -169,4 +169,45 @@ test("selects models from explicit capability groups before name heuristics", ()
   assert.equal(selected.id, "paint-pro")
 })
 
+test("prepares retry sessions by resetting only failed and interrupted steps", () => {
+  const session = module.prepareFailedStepsForRetry({
+    id: "session-1",
+    userRequest: "make images",
+    status: "failed",
+    messages: [],
+    steps: [
+      { id: "done", toolId: "image-generate", input: "done", status: "completed", outputImage: "data:image/png;base64,ok" },
+      { id: "failed", toolId: "image-generate", input: "failed", status: "failed", error: "busy" },
+      { id: "interrupted", toolId: "image-generate", input: "interrupted", status: "interrupted", error: "refresh" },
+    ],
+    createdAt: 1,
+    updatedAt: 1,
+  })
+
+  assert.equal(session.steps[0].status, "completed")
+  assert.equal(session.steps[0].outputImage, "data:image/png;base64,ok")
+  assert.equal(session.steps[1].status, "pending")
+  assert.equal(session.steps[1].error, "")
+  assert.equal(session.steps[2].status, "pending")
+  assert.equal(session.status, "running")
+})
+
+test("marks dependent pending steps as skipped when prerequisites fail", () => {
+  const session = module.markBlockedDependentSteps({
+    id: "session-1",
+    userRequest: "chain",
+    status: "running",
+    messages: [],
+    steps: [
+      { id: "first", toolId: "summary", input: "first", status: "failed", error: "bad input" },
+      { id: "second", toolId: "polishing", input: "second", status: "pending", dependsOn: ["first"] },
+    ],
+    createdAt: 1,
+    updatedAt: 1,
+  })
+
+  assert.equal(session.steps[1].status, "skipped")
+  assert.equal(session.steps[1].error, "前置步骤失败，已跳过。")
+})
+
 await writeFile(join(outdir, "agent-runner-last-run.txt"), new Date().toISOString())

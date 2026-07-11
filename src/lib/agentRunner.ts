@@ -3,12 +3,13 @@ import { filterModelsForTool } from "@/data/models"
 import { normalizeToolImageOutput, runConfiguredTool } from "@/lib/genericAiClient"
 import type { ApiConfiguration, ModelCapability, ModelDefinition, ModelIdGroups, ToolDefinition } from "@/types/sheepai"
 
-export type AgentStepStatus = "pending" | "running" | "completed" | "failed" | "interrupted"
+export type AgentStepStatus = "pending" | "running" | "completed" | "failed" | "interrupted" | "skipped"
 export type AgentSessionStatus = "idle" | "planning" | "running" | "completed" | "failed" | "interrupted"
 
 export interface AgentPlanStep {
   toolId: string
   input: string
+  dependsOn?: string[]
 }
 
 export interface AgentPlan {
@@ -77,8 +78,9 @@ const AGENT_PLANNER_TOOL: ToolDefinition = {
   systemPrompt: [
     "你是一个站内工具调度智能体，只能选择给定工具完成用户需求。",
     "你必须只输出 JSON，不要输出 Markdown、解释或额外文本。",
-    "JSON 格式：{\"summary\":\"一句话说明计划\",\"steps\":[{\"toolId\":\"工具 ID\",\"input\":\"传给该工具的完整输入\"}]}。",
+    "JSON 格式：{\"summary\":\"一句话说明计划\",\"steps\":[{\"toolId\":\"工具 ID\",\"input\":\"传给该工具的完整输入\",\"dependsOn\":[\"前置步骤序号\"]}]}。",
     "最多输出 6 个步骤。需要多张图片时，为每张图片创建一个 image-generate 步骤。",
+    "如果步骤之间相互独立，不要填写 dependsOn。只有后一步必须使用前一步结果时，才填写前置步骤序号，例如 [\"1\"]。",
     "不要选择需要上传文件或图片输入的工具。",
   ].join("\n"),
   buildUserPrompt: (inputText: string): string => inputText,
@@ -121,9 +123,12 @@ export function sanitizeAgentPlan(value: unknown): AgentPlan {
       if (!isRecord(step)) return null
       const toolId = asString(step.toolId)
       const input = asString(step.input)
+      const dependsOn = Array.isArray(step.dependsOn)
+        ? step.dependsOn.map((id) => asString(id)).filter(Boolean)
+        : undefined
       if (!AGENT_ALLOWED_TOOL_IDS.has(toolId)) return null
       if (!input) return null
-      return { toolId, input }
+      return { toolId, input, dependsOn }
     })
     .filter((step): step is AgentPlanStep => step !== null)
     .slice(0, MAX_AGENT_STEPS)
@@ -167,7 +172,7 @@ function normalizeStep(value: unknown, index: number): AgentSessionStep | null {
   const input = asString(value.input)
   if (!AGENT_ALLOWED_TOOL_IDS.has(toolId) || !input) return null
   const rawStatus = asString(value.status)
-  const status: AgentStepStatus = rawStatus === "completed" || rawStatus === "failed"
+  const status: AgentStepStatus = rawStatus === "completed" || rawStatus === "failed" || rawStatus === "skipped"
     ? rawStatus
     : rawStatus === "running" || rawStatus === "interrupted"
       ? "interrupted"
@@ -178,6 +183,7 @@ function normalizeStep(value: unknown, index: number): AgentSessionStep | null {
     id: asString(value.id) || `step-${index + 1}`,
     toolId,
     input,
+    dependsOn: Array.isArray(value.dependsOn) ? value.dependsOn.map((id) => asString(id)).filter(Boolean) : undefined,
     status,
     toolName: asString(value.toolName) || tool?.name,
     outputText: asString(value.outputText),
@@ -242,15 +248,56 @@ export function createAgentSession(userRequest: string): AgentSession {
 }
 
 export function createStepsFromPlan(plan: AgentPlan): AgentSessionStep[] {
+  const generatedIds = plan.steps.map((_, index) => `${Date.now()}-${index}`)
   return plan.steps.map((step, index) => {
     const tool = getToolById(step.toolId)
     return {
       ...step,
-      id: `${Date.now()}-${index}`,
+      id: generatedIds[index],
+      dependsOn: step.dependsOn?.map((dependency) => generatedIds[Number(dependency) - 1] ?? dependency).filter(Boolean),
       status: "pending",
       toolName: tool?.name ?? step.toolId,
     }
   })
+}
+
+export function prepareFailedStepsForRetry(session: AgentSession): AgentSession {
+  return {
+    ...session,
+    status: "running",
+    error: "",
+    steps: session.steps.map((step) => {
+      if (step.status !== "failed" && step.status !== "interrupted" && step.status !== "skipped") return step
+      return {
+        ...step,
+        status: "pending",
+        error: "",
+        outputText: "",
+        outputImage: "",
+        endpoint: "",
+      }
+    }),
+    updatedAt: Date.now(),
+  }
+}
+
+export function markBlockedDependentSteps(session: AgentSession): AgentSession {
+  const failedStepIds = new Set(session.steps.filter((step) => step.status === "failed" || step.status === "skipped").map((step) => step.id))
+  if (failedStepIds.size === 0) return session
+
+  return {
+    ...session,
+    steps: session.steps.map((step) => {
+      if (step.status !== "pending") return step
+      if (!step.dependsOn?.some((dependencyId) => failedStepIds.has(dependencyId))) return step
+      return {
+        ...step,
+        status: "skipped",
+        error: "前置步骤失败，已跳过。",
+      }
+    }),
+    updatedAt: Date.now(),
+  }
 }
 
 function buildPlannerPrompt(userRequest: string): string {
@@ -352,7 +399,13 @@ export async function executeAgentSession(session: AgentSession, context: AgentR
   emitSession(nextSession, context.onSessionChange)
 
   for (const step of nextSession.steps) {
-    if (step.status === "completed") continue
+    if (step.status === "completed" || step.status === "skipped") continue
+    if (step.dependsOn?.some((dependencyId) => nextSession.steps.find((candidate) => candidate.id === dependencyId)?.status !== "completed")) {
+      step.status = "skipped"
+      step.error = "前置步骤失败，已跳过。"
+      emitSession(nextSession, context.onSessionChange)
+      continue
+    }
     const tool = getAgentToolById(step.toolId)
     if (!tool) {
       step.status = "failed"
@@ -390,10 +443,15 @@ export async function executeAgentSession(session: AgentSession, context: AgentR
       step.error = error instanceof Error ? error.message : "工具调用失败。"
     }
 
+    if (step.status === "failed") {
+      const blockedSession = markBlockedDependentSteps(nextSession)
+      nextSession.steps = blockedSession.steps
+    }
+
     emitSession(nextSession, context.onSessionChange)
   }
 
-  nextSession.status = nextSession.steps.some((step) => step.status === "failed") ? "failed" : "completed"
+  nextSession.status = nextSession.steps.some((step) => step.status === "failed" || step.status === "skipped") ? "failed" : "completed"
   nextSession.messages = [
     ...nextSession.messages,
     {

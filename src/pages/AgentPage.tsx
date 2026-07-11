@@ -16,6 +16,7 @@ import {
   executeAgentSession,
   getAgentTextModels,
   planAgentSession,
+  prepareFailedStepsForRetry,
   runAgentSession,
   type AgentSession,
   type AgentSessionStep,
@@ -30,6 +31,7 @@ function getStatusLabel(status: AgentSession["status"] | AgentSessionStep["statu
     case "completed": return "已完成"
     case "failed": return "失败"
     case "interrupted": return "已中断"
+    case "skipped": return "已跳过"
     default: return "待运行"
   }
 }
@@ -39,48 +41,51 @@ function StepStatusIcon({ status }: { status: AgentSessionStep["status"] }) {
   if (status === "completed") return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
   if (status === "failed") return <XCircle className="h-4 w-4 text-red-500" />
   if (status === "interrupted") return <AlertCircle className="h-4 w-4 text-amber-500" />
+  if (status === "skipped") return <AlertCircle className="h-4 w-4 text-slate-400" />
   return <Sparkles className="h-4 w-4 text-slate-300" />
 }
 
-function StepCard({ step, index }: { step: AgentSessionStep; index: number }) {
+function StepStatusRow({ step, index }: { step: AgentSessionStep; index: number }) {
   return (
-    <Card className="border-white/75 bg-white/90 shadow-lg shadow-slate-200/60">
-      <CardHeader className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle className="text-base">步骤 {index + 1} · {step.toolName ?? step.toolId}</CardTitle>
-            <CardDescription className="mt-2 break-words leading-6">{step.input}</CardDescription>
-          </div>
-          <Badge variant="outline" className="shrink-0 gap-1">
-            <StepStatusIcon status={step.status} />
-            {getStatusLabel(step.status)}
-          </Badge>
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <div className="flex items-start gap-3">
+        <div className={cn(
+          "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+          step.status === "completed" ? "bg-emerald-50 text-emerald-700" :
+            step.status === "failed" ? "bg-red-50 text-red-700" :
+              step.status === "running" ? "bg-sky-50 text-sky-700" : "border border-slate-300 bg-white text-slate-700",
+        )}>
+          {index + 1}
         </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="truncate text-sm font-semibold text-slate-950">{step.toolName ?? step.toolId}</p>
+            <Badge variant="outline" className="shrink-0 gap-1">
+              <StepStatusIcon status={step.status} />
+              {getStatusLabel(step.status)}
+            </Badge>
+          </div>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{step.input}</p>
+          {step.error && <p className="mt-2 line-clamp-2 text-xs leading-5 text-red-500">{step.error}</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TextResultCard({ step, index }: { step: AgentSessionStep; index: number }) {
+  if (!step.outputText || step.outputText === "图片已生成。") return null
+  return (
+    <Card className="border-white/75 bg-white/90 shadow-lg">
+      <CardHeader>
+        <CardTitle className="text-base">文本结果 {index + 1}</CardTitle>
+        <CardDescription className="line-clamp-2">{step.input}</CardDescription>
       </CardHeader>
-      {(step.error || step.outputImage || step.outputText) && (
-        <CardContent className="space-y-3">
-          {step.error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>执行失败</AlertTitle>
-              <AlertDescription>{step.error}</AlertDescription>
-            </Alert>
-          )}
-          {step.outputImage && (
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-              <img src={step.outputImage} alt={`${step.toolName ?? step.toolId} 结果`} className="max-h-[420px] w-full object-contain" />
-            </div>
-          )}
-          {step.outputText && step.outputText !== "图片已生成。" && (
-            <pre className="whitespace-pre-wrap break-words rounded-2xl bg-slate-950 p-4 font-sans text-sm leading-7 text-slate-100">
-              {step.outputText}
-            </pre>
-          )}
-          {step.endpoint && (
-            <p className="break-all rounded-xl bg-slate-50 p-3 font-mono text-xs text-slate-500">Request: {step.endpoint}</p>
-          )}
-        </CardContent>
-      )}
+      <CardContent>
+        <pre className="whitespace-pre-wrap break-words rounded-2xl bg-slate-950 p-4 font-sans text-sm leading-7 text-slate-100">
+          {step.outputText}
+        </pre>
+      </CardContent>
     </Card>
   )
 }
@@ -98,7 +103,10 @@ export function AgentPage() {
     return textModels.find((model) => model.id === activeModel?.id) ?? textModels[0]
   }, [activeModel?.id, textModels])
   const canRun = Boolean(activeConfig && hasRunnableConfig && textModel && !isRunning)
-  const canResume = Boolean(session && session.steps.length > 0 && session.status !== "completed" && !isRunning)
+  const failedStepCount = session?.steps.filter((step) => step.status === "failed" || step.status === "interrupted" || step.status === "skipped").length ?? 0
+  const completedStepCount = session?.steps.filter((step) => step.status === "completed").length ?? 0
+  const runningStepCount = session?.steps.filter((step) => step.status === "running").length ?? 0
+  const canRetryFailed = Boolean(session && failedStepCount > 0 && !isRunning)
 
   function updateSession(nextSession: AgentSession) {
     setSession(nextSession)
@@ -158,9 +166,9 @@ export function AgentPage() {
     await runWithSession(nextSession, "full")
   }
 
-  async function handleResume() {
+  async function handleRetryFailed() {
     if (!session) return
-    await runWithSession(session, session.steps.length > 0 ? "execute" : "full")
+    await runWithSession(prepareFailedStepsForRetry(session), "execute")
   }
 
   async function handleReplan() {
@@ -242,8 +250,8 @@ export function AgentPage() {
                 {isRunning ? "运行中..." : "运行智能体"}
               </Button>
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={handleResume} disabled={!canResume}>
-                  <RotateCcw className="h-4 w-4" /> 继续
+                <Button variant="outline" onClick={handleRetryFailed} disabled={!canRetryFailed}>
+                  <RotateCcw className="h-4 w-4" /> 重试失败
                 </Button>
                 <Button variant="outline" onClick={resetSession} disabled={isRunning || (!session && !inputText)}>
                   清空
@@ -263,7 +271,26 @@ export function AgentPage() {
                   <span className="text-slate-500">状态</span>
                   <Badge variant={session.status === "failed" ? "destructive" : "outline"}>{getStatusLabel(session.status)}</Badge>
                 </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-xl bg-emerald-50 px-3 py-2 text-center">
+                    <p className="text-xs text-emerald-600">成功</p>
+                    <p className="mt-1 font-bold text-emerald-700">{completedStepCount}</p>
+                  </div>
+                  <div className="rounded-xl bg-red-50 px-3 py-2 text-center">
+                    <p className="text-xs text-red-600">失败</p>
+                    <p className="mt-1 font-bold text-red-700">{failedStepCount}</p>
+                  </div>
+                  <div className="rounded-xl bg-sky-50 px-3 py-2 text-center">
+                    <p className="text-xs text-sky-700">运行</p>
+                    <p className="mt-1 font-bold text-sky-800">{runningStepCount}</p>
+                  </div>
+                </div>
                 {session.summary && <p className="rounded-xl bg-slate-50 p-3 leading-6 text-slate-600">{session.summary}</p>}
+                {failedStepCount > 0 && (
+                  <Button variant="outline" className="w-full" onClick={handleRetryFailed} disabled={!canRetryFailed}>
+                    <RotateCcw className="h-4 w-4" /> 重试失败任务
+                  </Button>
+                )}
                 {session.status === "failed" && session.steps.length === 0 && (
                   <Button variant="outline" className="w-full" onClick={handleReplan} disabled={!activeConfig || !textModel || isRunning}>
                     重新规划
@@ -298,12 +325,11 @@ export function AgentPage() {
             </div>
           )}
 
-          {session?.steps.map((step, index) => <StepCard key={step.id} step={step} index={index} />)}
-
           {session?.steps.some((step) => step.outputImage) && (
             <Card className="border-white/75 bg-white/90 shadow-xl">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><ImageIcon className="h-4 w-4" /> 图片结果</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><ImageIcon className="h-4 w-4" /> 最终结果</CardTitle>
+                <CardDescription>已成功生成的图片会集中展示在这里。</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {session.steps.filter((step) => step.outputImage).map((step) => (
@@ -312,6 +338,24 @@ export function AgentPage() {
                     <img src={step.outputImage} alt={step.input} className="aspect-square w-full object-cover" />
                   </a>
                 ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {session?.steps.some((step) => step.outputText && step.outputText !== "图片已生成。") && (
+            <div className="space-y-4">
+              {session.steps.map((step, index) => <TextResultCard key={`${step.id}-text`} step={step} index={index} />)}
+            </div>
+          )}
+
+          {session && session.steps.length > 0 && (
+            <Card className="border-white/75 bg-white/90 shadow-xl">
+              <CardHeader>
+                <CardTitle className="text-base">执行状态</CardTitle>
+                <CardDescription>{completedStepCount} / {session.steps.length} 个步骤已完成</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {session.steps.map((step, index) => <StepStatusRow key={step.id} step={step} index={index} />)}
               </CardContent>
             </Card>
           )}
