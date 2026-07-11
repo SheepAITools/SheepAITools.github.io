@@ -50,7 +50,7 @@ export interface AgentRunContext {
   config: ApiConfiguration
   textModel: ModelDefinition
   availableModels: ModelDefinition[]
-  onSessionChange?: (session: AgentSession) => void
+  onSessionChange?: (session: AgentSession) => void | Promise<void>
 }
 
 const AGENT_ALLOWED_TOOL_IDS = new Set([
@@ -401,9 +401,9 @@ export function selectAgentModelForTool(availableModels: ModelDefinition[], tool
   return compatibleModels[0]
 }
 
-function emitSession(session: AgentSession, onSessionChange: AgentRunContext["onSessionChange"]): void {
+async function emitSession(session: AgentSession, onSessionChange: AgentRunContext["onSessionChange"]): Promise<void> {
   session.updatedAt = Date.now()
-  onSessionChange?.({ ...session, messages: [...session.messages], steps: session.steps.map((step) => ({ ...step })) })
+  await onSessionChange?.({ ...session, messages: [...session.messages], steps: session.steps.map((step) => ({ ...step })) })
 }
 
 export async function planAgentSession(session: AgentSession, context: AgentRunContext): Promise<AgentSession> {
@@ -413,7 +413,7 @@ export async function planAgentSession(session: AgentSession, context: AgentRunC
     error: "",
     updatedAt: Date.now(),
   }
-  emitSession(nextSession, context.onSessionChange)
+  await emitSession(nextSession, context.onSessionChange)
 
   const response = await runConfiguredTool({
     apiKey: context.config.apiKey,
@@ -430,7 +430,7 @@ export async function planAgentSession(session: AgentSession, context: AgentRunC
     { role: "assistant", content: plan.summary, createdAt: Date.now() },
   ]
   nextSession.status = "running"
-  emitSession(nextSession, context.onSessionChange)
+  await emitSession(nextSession, context.onSessionChange)
   return nextSession
 }
 
@@ -442,21 +442,21 @@ export async function executeAgentSession(session: AgentSession, context: AgentR
     steps: session.steps.map((step) => step.status === "interrupted" ? { ...step, status: "pending" } : { ...step }),
     updatedAt: Date.now(),
   }
-  emitSession(nextSession, context.onSessionChange)
+  await emitSession(nextSession, context.onSessionChange)
 
   for (const step of nextSession.steps) {
     if (step.status === "completed" || step.status === "skipped") continue
     if (step.dependsOn?.some((dependencyId) => nextSession.steps.find((candidate) => candidate.id === dependencyId)?.status !== "completed")) {
       step.status = "skipped"
       step.error = "前置步骤失败，已跳过。"
-      emitSession(nextSession, context.onSessionChange)
+      await emitSession(nextSession, context.onSessionChange)
       continue
     }
     const tool = getAgentToolById(step.toolId)
     if (!tool) {
       step.status = "failed"
       step.error = "工具不可用。"
-      emitSession(nextSession, context.onSessionChange)
+      await emitSession(nextSession, context.onSessionChange)
       continue
     }
 
@@ -464,13 +464,13 @@ export async function executeAgentSession(session: AgentSession, context: AgentR
     if (!model) {
       step.status = "failed"
       step.error = "当前配置缺少该工具可用的模型。"
-      emitSession(nextSession, context.onSessionChange)
+      await emitSession(nextSession, context.onSessionChange)
       continue
     }
 
     step.status = "running"
     step.error = ""
-    emitSession(nextSession, context.onSessionChange)
+    await emitSession(nextSession, context.onSessionChange)
 
     try {
       const imageInput = resolveImageInputForStep(nextSession, step)
@@ -497,7 +497,7 @@ export async function executeAgentSession(session: AgentSession, context: AgentR
       nextSession.steps = blockedSession.steps
     }
 
-    emitSession(nextSession, context.onSessionChange)
+    await emitSession(nextSession, context.onSessionChange)
   }
 
   nextSession.status = nextSession.steps.some((step) => step.status === "failed" || step.status === "skipped") ? "failed" : "completed"
@@ -509,7 +509,7 @@ export async function executeAgentSession(session: AgentSession, context: AgentR
       createdAt: Date.now(),
     },
   ]
-  emitSession(nextSession, context.onSessionChange)
+  await emitSession(nextSession, context.onSessionChange)
   return nextSession
 }
 

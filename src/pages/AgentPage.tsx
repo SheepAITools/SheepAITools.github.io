@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   AlertCircle, ArrowLeft, Bot, CheckCircle2, ImageIcon, Loader2,
@@ -105,28 +105,46 @@ function TextResultCard({ step, index }: { step: AgentSessionStep; index: number
 export function AgentPage() {
   const navigate = useNavigate()
   const { activeConfig, activeModel, availableModels, hasRunnableConfig } = useApiConfig()
-  const [session, setSession] = useState<AgentSession | null>(() => loadAgentSession())
-  const [inputText, setInputText] = useState(session?.userRequest ?? "")
+  const [session, setSession] = useState<AgentSession | null>(null)
+  const [inputText, setInputText] = useState("")
   const [error, setError] = useState("")
   const [isRunning, setIsRunning] = useState(false)
+  const [isSessionLoaded, setIsSessionLoaded] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+
+    loadAgentSession().then((loadedSession) => {
+      if (!isMounted) return
+      if (loadedSession) {
+        setSession(loadedSession)
+        setInputText(loadedSession.userRequest)
+      }
+      setIsSessionLoaded(true)
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const textModels = useMemo(() => getAgentTextModels(availableModels), [availableModels])
   const textModel = useMemo(() => {
     return textModels.find((model) => model.id === activeModel?.id) ?? textModels[0]
   }, [activeModel?.id, textModels])
-  const canRun = Boolean(activeConfig && hasRunnableConfig && textModel && !isRunning)
+  const canRun = Boolean(activeConfig && hasRunnableConfig && textModel && !isRunning && isSessionLoaded)
   const failedStepCount = session?.steps.filter((step) => step.status === "failed" || step.status === "interrupted" || step.status === "skipped").length ?? 0
   const completedStepCount = session?.steps.filter((step) => step.status === "completed").length ?? 0
   const runningStepCount = session?.steps.filter((step) => step.status === "running").length ?? 0
   const canRetryFailed = Boolean(session && failedStepCount > 0 && !isRunning)
 
-  function updateSession(nextSession: AgentSession) {
+  function updateSession(nextSession: AgentSession): Promise<void> {
     setSession(nextSession)
-    saveAgentSession(nextSession)
+    return saveAgentSession(nextSession)
   }
 
   function resetSession() {
-    clearAgentSession()
+    void clearAgentSession()
     setSession(null)
     setInputText("")
     setError("")
@@ -150,7 +168,7 @@ export function AgentPage() {
       const result = mode === "execute"
         ? await executeAgentSession(targetSession, context)
         : await runAgentSession(targetSession, context)
-      updateSession(result)
+      await updateSession(result)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "智能体运行失败。"
       const failedSession: AgentSession = {
@@ -159,7 +177,7 @@ export function AgentPage() {
         error: message,
         updatedAt: Date.now(),
       }
-      updateSession(failedSession)
+      await updateSession(failedSession)
       setError(message)
     } finally {
       setIsRunning(false)
@@ -174,7 +192,7 @@ export function AgentPage() {
     }
 
     const nextSession = session ? prepareSessionForFollowUp(session, trimmed) : createAgentSession(trimmed)
-    updateSession(nextSession)
+    await updateSession(nextSession)
     await runWithSession(nextSession, "full")
   }
 
@@ -190,7 +208,7 @@ export function AgentPage() {
   async function handleReplan() {
     if (!session || !activeConfig || !textModel) return
     const freshSession = createAgentSession(session.userRequest)
-    updateSession(freshSession)
+    await updateSession(freshSession)
     setIsRunning(true)
     setError("")
     try {
@@ -206,10 +224,10 @@ export function AgentPage() {
         availableModels,
         onSessionChange: updateSession,
       })
-      updateSession(result)
+      await updateSession(result)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "智能体运行失败。"
-      updateSession({ ...freshSession, status: "failed", error: message, updatedAt: Date.now() })
+      await updateSession({ ...freshSession, status: "failed", error: message, updatedAt: Date.now() })
       setError(message)
     } finally {
       setIsRunning(false)
